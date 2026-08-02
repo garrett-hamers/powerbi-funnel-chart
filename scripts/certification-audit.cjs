@@ -28,7 +28,8 @@ const sourceParityPaths = [
   "pbiviz.json",
   "src",
   "scripts/package.cjs",
-  "scripts/package-utils.cjs"
+  "scripts/package-utils.cjs",
+  "scripts/normalize-package.cjs"
 ];
 let currentCommit;
 try {
