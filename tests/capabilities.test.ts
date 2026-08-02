@@ -12,10 +12,17 @@ describe("certification-first package metadata", () => {
       visual: {
         guid: string;
         name: string;
+        supportUrl: string;
       };
+      author: { name: string; email: string };
     };
     expect(pbiviz.visual.guid).toBe("atlynFunnelA1B2C3D4");
     expect(pbiviz.visual.name).toBe("atlynFunnel");
+    expect(pbiviz.visual.supportUrl).toBe("https://github.com/garrett-hamers/powerbi-funnel-chart");
+    expect(pbiviz.author).toEqual({
+      name: "Garrett Hamers",
+      email: "garrett.hamers@gmail.com"
+    });
     expect(capabilities.privileges).toEqual([]);
   });
 
@@ -23,6 +30,15 @@ describe("certification-first package metadata", () => {
     const capabilities = fs.readFileSync(path.join(root, "capabilities.json"), "utf8");
     expect(capabilities).toContain('"window"');
     expect(capabilities).not.toMatch(/"top"|sortBy|orderBy/i);
+  });
+
+  test("requires both Stage and Value roles", () => {
+    const capabilities = JSON.parse(fs.readFileSync(path.join(root, "capabilities.json"), "utf8")) as {
+      dataViewMappings: Array<{ conditions: Array<{ Stage: { min: number }; Value: { min: number } }> }>;
+    };
+    const condition = capabilities.dataViewMappings[0].conditions[0];
+    expect(condition.Stage.min).toBe(1);
+    expect(condition.Value.min).toBe(1);
   });
 
   test("does not include network access, unsafe DOM APIs, or external assets", () => {

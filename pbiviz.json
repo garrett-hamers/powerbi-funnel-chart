@@ -6,13 +6,13 @@
     "visualClassName": "Visual",
     "version": "1.0.0.0",
     "description": "Ordered conversion funnel with bottleneck diagnostics",
-    "supportUrl": "https://example.invalid",
+    "supportUrl": "https://github.com/garrett-hamers/powerbi-funnel-chart",
     "gitHubUrl": "https://github.com/garrett-hamers/powerbi-funnel-chart"
   },
   "apiVersion": "5.11.0",
   "author": {
-    "name": "Atlyn",
-    "email": "support@example.invalid"
+    "name": "Garrett Hamers",
+    "email": "garrett.hamers@gmail.com"
   },
   "assets": {
     "icon": "assets/icon.svg"

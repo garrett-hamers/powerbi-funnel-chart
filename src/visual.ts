@@ -44,6 +44,7 @@ export class Visual implements IVisual {
   private readonly selections = new Map<string, StageSelection>();
   private readonly stageButtons: HTMLButtonElement[] = [];
   private readonly cleanupHandlers: Array<() => void> = [];
+  private readonly longPressTimers = new Set<ReturnType<typeof setTimeout>>();
   private model: FunnelModel = {
     stages: [],
     warnings: [],
@@ -91,7 +92,7 @@ export class Visual implements IVisual {
       this.reducedMotion = mediaQuery.matches;
       const onMotionChanged = (): void => {
         this.reducedMotion = mediaQuery.matches;
-        this.root.toggleAttribute("data-reduced-motion", this.reducedMotion);
+        this.setStateAttribute("data-reduced-motion", this.reducedMotion);
       };
       mediaQuery.addEventListener?.("change", onMotionChanged);
       this.cleanupHandlers.push(() => mediaQuery.removeEventListener?.("change", onMotionChanged));
@@ -159,6 +160,7 @@ export class Visual implements IVisual {
       return;
     }
     this.destroyed = true;
+    this.clearLongPressTimers();
     this.cleanupHandlers.splice(0).forEach((cleanup) => cleanup());
     this.selections.clear();
     this.stageButtons.splice(0);
@@ -173,9 +175,9 @@ export class Visual implements IVisual {
   }
 
   private render(width: number, height: number): void {
-    this.root.toggleAttribute("data-high-contrast", Boolean(this.host.colorPalette?.isHighContrast));
-    this.root.toggleAttribute("data-reduced-motion", this.reducedMotion);
-    this.root.toggleAttribute("data-compact", width < 480 || height < 320);
+    this.setStateAttribute("data-high-contrast", Boolean(this.host.colorPalette?.isHighContrast));
+    this.setStateAttribute("data-reduced-motion", this.reducedMotion);
+    this.setStateAttribute("data-compact", width < 480 || height < 320);
     this.root.style.width = `${Math.max(0, width)}px`;
     this.root.style.height = `${Math.max(0, height)}px`;
     this.clearChildren();
@@ -321,17 +323,17 @@ export class Visual implements IVisual {
       let longPressTimer: ReturnType<typeof setTimeout> | undefined;
       button.addEventListener("pointerdown", (event) => {
         if (event.pointerType === "touch") {
-          longPressTimer = setTimeout(() => this.showContextMenu(stage, event.clientX, event.clientY), 650);
+          this.cancelLongPress(longPressTimer);
+          longPressTimer = this.scheduleLongPress(stage, event.clientX, event.clientY);
         }
       });
       const clearLongPress = (): void => {
-        if (longPressTimer) {
-          clearTimeout(longPressTimer);
-          longPressTimer = undefined;
-        }
+        this.cancelLongPress(longPressTimer);
+        longPressTimer = undefined;
       };
       button.addEventListener("pointerup", clearLongPress);
       button.addEventListener("pointerleave", clearLongPress);
+      button.addEventListener("pointercancel", clearLongPress);
       item.appendChild(button);
       list.appendChild(item);
       this.stageButtons.push(button);
@@ -482,6 +484,7 @@ export class Visual implements IVisual {
   }
 
   private clearChildren(): void {
+    this.clearLongPressTimers();
     this.selections.clear();
     while (this.root.firstChild) {
       this.root.removeChild(this.root.firstChild);
@@ -495,5 +498,37 @@ export class Visual implements IVisual {
     empty.setAttribute("role", "status");
     empty.textContent = message;
     this.root.appendChild(empty);
+  }
+
+  private setStateAttribute(name: string, enabled: boolean): void {
+    if (enabled) {
+      this.root.setAttribute(name, "true");
+    } else {
+      this.root.removeAttribute(name);
+    }
+  }
+
+  private scheduleLongPress(stage: FunnelStage, x: number, y: number): ReturnType<typeof setTimeout> {
+    const renderVersion = this.renderVersion;
+    const timer = setTimeout(() => {
+      this.longPressTimers.delete(timer);
+      if (!this.destroyed && renderVersion === this.renderVersion) {
+        this.showContextMenu(stage, x, y);
+      }
+    }, 650);
+    this.longPressTimers.add(timer);
+    return timer;
+  }
+
+  private cancelLongPress(timer: ReturnType<typeof setTimeout> | undefined): void {
+    if (timer) {
+      clearTimeout(timer);
+      this.longPressTimers.delete(timer);
+    }
+  }
+
+  private clearLongPressTimers(): void {
+    this.longPressTimers.forEach((timer) => clearTimeout(timer));
+    this.longPressTimers.clear();
   }
 }
