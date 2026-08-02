@@ -1,0 +1,168 @@
+{
+  "privileges": [],
+  "supportsHighlight": true,
+  "supportsKeyboardFocus": true,
+  "supportsMultiVisualSelection": true,
+  "supportsLandingPage": true,
+  "supportsEmptyDataView": true,
+  "tooltips": {
+    "supportedTypes": {
+      "default": true,
+      "canvas": true
+    },
+    "roles": [
+      "Tooltips"
+    ],
+    "supportEnhancedTooltips": true
+  },
+  "dataRoles": [
+    {
+      "displayName": "Stage",
+      "name": "Stage",
+      "kind": "Grouping",
+      "description": "Ordered process stage"
+    },
+    {
+      "displayName": "Value",
+      "name": "Value",
+      "kind": "Measure",
+      "description": "Stage volume or amount",
+      "requiredTypes": [
+        {
+          "numeric": true
+        }
+      ]
+    },
+    {
+      "displayName": "Stage order",
+      "name": "StageOrder",
+      "kind": "Measure",
+      "description": "Optional numeric order; ties are diagnosed",
+      "requiredTypes": [
+        {
+          "numeric": true
+        }
+      ]
+    },
+    {
+      "displayName": "Target",
+      "name": "Target",
+      "kind": "Measure",
+      "description": "Optional benchmark for each stage",
+      "requiredTypes": [
+        {
+          "numeric": true
+        }
+      ]
+    },
+    {
+      "displayName": "Group",
+      "name": "Group",
+      "kind": "Grouping",
+      "description": "Optional segment"
+    },
+    {
+      "displayName": "Tooltips",
+      "name": "Tooltips",
+      "kind": "GroupingOrMeasure",
+      "description": "Optional detail fields (up to five)"
+    }
+  ],
+  "dataViewMappings": [
+    {
+      "conditions": [
+        {
+          "Stage": {
+            "min": 1,
+            "max": 1
+          },
+          "Value": {
+            "min": 1,
+            "max": 1
+          },
+          "StageOrder": {
+            "max": 1
+          },
+          "Target": {
+            "max": 1
+          },
+          "Group": {
+            "max": 1
+          },
+          "Tooltips": {
+            "max": 5
+          }
+        }
+      ],
+      "categorical": {
+        "categories": {
+          "select": [
+            {
+              "for": {
+                "in": "Stage"
+              },
+              "dataReductionAlgorithm": {
+                "window": {
+                  "count": 50
+                }
+              }
+            },
+            {
+              "for": {
+                "in": "Group"
+              }
+            }
+          ]
+        },
+        "values": {
+          "select": [
+            {
+              "for": {
+                "in": "Value"
+              }
+            },
+            {
+              "for": {
+                "in": "StageOrder"
+              }
+            },
+            {
+              "for": {
+                "in": "Target"
+              }
+            },
+            {
+              "for": {
+                "in": "Tooltips"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "objects": {
+    "dataPoint": {
+      "properties": {
+        "fill": {
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "labels": {
+      "properties": {
+        "show": {
+          "type": {
+            "bool": true
+          }
+        }
+      }
+    }
+  }
+}

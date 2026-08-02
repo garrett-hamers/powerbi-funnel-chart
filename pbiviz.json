@@ -1,0 +1,25 @@
+{
+  "visual": {
+    "name": "atlynFunnel",
+    "displayName": "Atlyn Funnel",
+    "guid": "atlynFunnelA1B2C3D4",
+    "visualClassName": "Visual",
+    "version": "1.0.0.0",
+    "description": "Ordered conversion funnel with bottleneck diagnostics",
+    "supportUrl": "https://github.com/garrett-hamers/powerbi-funnel-chart",
+    "gitHubUrl": "https://github.com/garrett-hamers/powerbi-funnel-chart"
+  },
+  "apiVersion": "5.11.0",
+  "author": {
+    "name": "Garrett Hamers",
+    "email": "garrett.hamers@gmail.com"
+  },
+  "assets": {
+    "icon": "assets/icon.svg"
+  },
+  "externalJS": [],
+  "style": "src/style.css",
+  "capabilities": "capabilities.json",
+  "dependencies": "dependencies.json",
+  "stringResources": []
+}

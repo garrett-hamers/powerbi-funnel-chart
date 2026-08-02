@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2019",
+    "module": "commonjs",
+    "lib": ["es2019", "dom"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": false,
+    "types": ["node", "jest"]
+  },
+  "files": ["src/visual.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}
