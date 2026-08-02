@@ -36,6 +36,7 @@ npm run typecheck
 npm run lint
 npm run build
 npm run package
+npm run release-manifest
 npm run certification-audit
 npm run audit
 ```

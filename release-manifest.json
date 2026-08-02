@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "visual": {
+    "name": "atlynFunnel",
+    "displayName": "Atlyn Funnel",
+    "guid": "atlynFunnelA1B2C3D4",
+    "version": "1.0.0.0",
+    "apiVersion": "5.11.0"
+  },
+  "package": {
+    "filename": "atlynFunnelA1B2C3D4.1.0.0.0.pbiviz",
+    "sha256": "969fbf241894c305bbc02bfb940354ae4cfcf8a1b4437597599419c7451a348a",
+    "bytes": 49034
+  },
+  "sourceCommit": "6d179c5c750a8e5b2d9bc4454e13e5391974c24d",
+  "packageVersion": "1.0.0",
+  "privileges": [],
+  "externalJS": []
+}
