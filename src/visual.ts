@@ -11,27 +11,16 @@ import ISelectionManager = powerbi.extensibility.ISelectionManager;
 import ITooltipService = powerbi.extensibility.ITooltipService;
 import { buildFunnelModel, DataViewLike, FunnelModel, FunnelStage, FunnelWarning } from "./model";
 import { createLocalizer, Localizer, warningTextKey } from "./localization";
+import { createFormattingModel, DEFAULT_FUNNEL_SETTINGS, FunnelSettings, readFunnelSettings } from "./settings";
+import "./style.css";
 
 const MAX_BAR_WIDTH = 420;
-const SVG_HEIGHT = 440;
+const MIN_CHART_HEIGHT = 220;
+const ROW_HEIGHT = 42;
 
 interface StageSelection {
   id?: ISelectionId;
   stage: FunnelStage;
-}
-
-interface ContextMenuManager {
-  showContextMenu?: (selectionId: ISelectionId | Record<string, never>, point: { x: number; y: number }) => void;
-}
-
-interface EventService {
-  renderingStarted?: () => void;
-  renderingFinished?: () => void;
-  renderingFailed?: (options: { errorCode: string }) => void;
-}
-
-interface InteractionHost extends IVisualHost {
-  allowInteractions?: boolean;
 }
 
 export class Visual implements IVisual {
@@ -41,6 +30,7 @@ export class Visual implements IVisual {
   private readonly tooltipService?: ITooltipService;
   private readonly localizationManager?: powerbi.extensibility.ILocalizationManager;
   private readonly localizer: Localizer;
+  private readonly eventService: powerbi.extensibility.IVisualEventService;
   private readonly selections = new Map<string, StageSelection>();
   private readonly stageButtons: HTMLButtonElement[] = [];
   private readonly cleanupHandlers: Array<() => void> = [];
@@ -51,28 +41,36 @@ export class Visual implements IVisual {
     hasExplicitOrder: false,
     hasGroup: false,
     groups: [],
-    truncated: false
+    truncated: false,
+    reducedCount: 0,
+    completeness: "complete"
   };
   private stageCategory?: DataViewCategoryColumn;
+  private groupCategory?: DataViewCategoryColumn;
+  private valueColumns?: powerbi.DataViewValueColumns;
+  private settings: FunnelSettings = DEFAULT_FUNNEL_SETTINGS;
   private reducedMotion = false;
   private interactionsEnabled = true;
   private destroyed = false;
   private renderVersion = 0;
+  private tooltipStageKey?: string;
+  private tooltipIsTouch = false;
 
   public constructor(options?: VisualConstructorOptions) {
     if (!options) {
       throw new Error("ATLYN_CONSTRUCTOR_OPTIONS_REQUIRED");
     }
     this.host = options.host;
-    this.interactionsEnabled = (this.host as InteractionHost).allowInteractions !== false;
+    this.interactionsEnabled = this.host.hostCapabilities?.allowInteractions !== false;
     this.localizationManager = this.host.createLocalizationManager?.();
+    this.eventService = this.host.eventService;
     this.selectionManager = this.host.createSelectionManager();
     this.tooltipService = this.host.tooltipService;
     this.localizer = createLocalizer(this.host.locale);
     this.root = document.createElement("div");
     this.root.className = "atlyn-funnel";
-    this.root.setAttribute("role", "application");
-    this.root.setAttribute("aria-label", "Atlyn Funnel");
+    this.root.setAttribute("role", "region");
+    this.root.setAttribute("aria-label", this.localizer.text("title", "Atlyn Funnel"));
     this.root.setAttribute("tabindex", "0");
     this.root.dir = this.localizer.direction;
     options.element.appendChild(this.root);
@@ -103,19 +101,23 @@ export class Visual implements IVisual {
     if (this.destroyed) {
       return;
     }
-    const events = this.host.eventService as EventService | undefined;
-    events?.renderingStarted?.();
+    this.eventService.renderingStarted(options);
     try {
       this.renderVersion += 1;
-      this.stageCategory = this.findStageCategory(options.dataViews?.[0]);
-      this.model = buildFunnelModel(options.dataViews?.[0] as unknown as DataViewLike, {
+      const dataView = options.dataViews?.[0];
+      this.stageCategory = this.findStageCategory(dataView);
+      this.groupCategory = this.findGroupCategory(dataView);
+      this.valueColumns = dataView?.categorical?.values;
+      this.settings = readFunnelSettings(dataView as unknown as DataViewLike);
+      this.model = buildFunnelModel(dataView as unknown as DataViewLike, {
         blankLabel: this.localizer.text("blank", "(Blank)")
       });
       this.render(options.viewport.width, options.viewport.height);
-      events?.renderingFinished?.();
-    } catch {
+      this.eventService.renderingFinished(options);
+    } catch (error) {
       this.renderEmpty(this.localizer.text("noData"));
-      events?.renderingFailed?.({ errorCode: "ATLYN_RENDER_FAILED" });
+      const reason = error instanceof Error ? error.message : "ATLYN_RENDER_FAILED";
+      this.eventService.renderingFailed(options, reason);
     }
   }
 
@@ -129,7 +131,7 @@ export class Visual implements IVisual {
           properties: {
             fill: {
               solid: {
-                color: "#2563eb"
+              color: this.settings.dataPointFill
               }
             }
           },
@@ -142,7 +144,7 @@ export class Visual implements IVisual {
         {
           objectName: "labels",
           properties: {
-            show: true
+            show: this.settings.labelsShow
           },
           selector: {}
         }
@@ -152,7 +154,9 @@ export class Visual implements IVisual {
   }
 
   public getFormattingModel(): powerbi.visuals.FormattingModel {
-    return { cards: [] };
+    return createFormattingModel(this.settings, this.localizer, {
+      displayName: (key, fallback) => this.getDisplayName(key, fallback)
+    });
   }
 
   public destroy(): void {
@@ -161,6 +165,7 @@ export class Visual implements IVisual {
     }
     this.destroyed = true;
     this.clearLongPressTimers();
+    this.hideTooltip(true);
     this.cleanupHandlers.splice(0).forEach((cleanup) => cleanup());
     this.selections.clear();
     this.stageButtons.splice(0);
@@ -174,7 +179,17 @@ export class Visual implements IVisual {
     return dataView?.categorical?.categories?.find((category) => Boolean(category.source.roles?.Stage));
   }
 
+  private findGroupCategory(dataView: powerbi.DataView | undefined): DataViewCategoryColumn | undefined {
+    return dataView?.categorical?.categories?.find((category) => Boolean(category.source.roles?.Group));
+  }
+
+  private getDisplayName(key: string, fallback: string): string {
+    const displayName = this.localizationManager?.getDisplayName(key);
+    return displayName && displayName !== key ? displayName : fallback;
+  }
+
   private render(width: number, height: number): void {
+    this.applyVisualStyles();
     this.setStateAttribute("data-high-contrast", Boolean(this.host.colorPalette?.isHighContrast));
     this.setStateAttribute("data-reduced-motion", this.reducedMotion);
     this.setStateAttribute("data-compact", width < 480 || height < 320);
@@ -193,7 +208,7 @@ export class Visual implements IVisual {
     if (warningPanel) {
       this.root.appendChild(warningPanel);
     }
-    this.root.appendChild(this.createChart(width));
+    this.root.appendChild(this.createChart(width, height));
     this.root.appendChild(this.createStageList());
     this.root.appendChild(this.createAccessibleTable());
   }
@@ -204,7 +219,7 @@ export class Visual implements IVisual {
     summary.setAttribute("aria-label", this.localizer.text("overallConversion"));
     const first = this.model.stages[0];
     const heading = document.createElement("h2");
-    heading.textContent = "Atlyn Funnel";
+    heading.textContent = this.localizer.text("title", "Atlyn Funnel");
     summary.appendChild(heading);
     const overallByGroup = [...new Set(this.model.stages.map((stage) => stage.group ?? ""))];
     overallByGroup.forEach((group) => {
@@ -212,13 +227,13 @@ export class Visual implements IVisual {
       const last = groupStages[groupStages.length - 1];
       const overall = document.createElement("span");
       overall.className = "atlyn-summary-metric";
-      const groupLabel = group ? ` (${group})` : "";
+      const groupLabel = group ? ` (${this.localizer.text("group")} ${group})` : "";
       overall.textContent = `${this.localizer.text("overallConversion")}${groupLabel}: ${this.localizer.percent(last.overallConversion)}`;
       summary.appendChild(overall);
     });
     const intake = document.createElement("span");
     intake.className = "atlyn-summary-intake";
-    intake.textContent = `${first.label}: ${this.localizer.number(first.value)}`;
+    intake.textContent = `${first.label}: ${this.localizer.number(first.value, undefined, first.valueFormat)}`;
     summary.appendChild(intake);
     return summary;
   }
@@ -244,10 +259,20 @@ export class Visual implements IVisual {
     return panel;
   }
 
-  private createChart(width: number): SVGSVGElement {
+  private createChart(width: number, height: number): HTMLDivElement {
+    const chartScroll = document.createElement("div");
+    chartScroll.className = "atlyn-chart-scroll";
+    chartScroll.setAttribute("role", "region");
+    chartScroll.setAttribute("aria-label", this.localizer.text("stageListLabel"));
+    chartScroll.style.maxHeight = `${Math.max(150, Math.floor(height * 0.55))}px`;
+
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("atlyn-chart");
-    svg.setAttribute("viewBox", `0 0 ${Math.max(width, 320)} ${SVG_HEIGHT}`);
+    const canvasWidth = Math.max(width, 320);
+    const chartHeight = Math.max(MIN_CHART_HEIGHT, this.model.stages.length * ROW_HEIGHT + 16);
+    svg.setAttribute("viewBox", `0 0 ${canvasWidth} ${chartHeight}`);
+    svg.setAttribute("height", String(chartHeight));
+    svg.style.height = `${chartHeight}px`;
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", this.localizer.text("stageListLabel"));
     svg.addEventListener("contextmenu", (event) => {
@@ -259,11 +284,14 @@ export class Visual implements IVisual {
       .filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
     const maxValue = Math.max(1, ...positiveValues);
     const chartWidth = Math.min(MAX_BAR_WIDTH, Math.max(160, width - 220));
-    const rowHeight = Math.max(30, Math.min(54, SVG_HEIGHT / Math.max(1, this.model.stages.length)));
+    const rowHeight = ROW_HEIGHT;
     this.model.stages.forEach((stage, index) => {
       const y = index * rowHeight + 8;
-      const barWidth = stage.value !== null ? Math.max(4, Math.min(chartWidth, (Math.abs(stage.value) / maxValue) * chartWidth)) : 4;
-      const x = (Math.max(width, 320) - barWidth) / 2;
+      const barWidth =
+        stage.value !== null && stage.value > 0
+          ? Math.max(4, Math.min(chartWidth, (stage.value / maxValue) * chartWidth))
+          : 0;
+      const x = (canvasWidth - barWidth) / 2;
       const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       bar.setAttribute("x", String(x));
       bar.setAttribute("y", String(y));
@@ -272,23 +300,42 @@ export class Visual implements IVisual {
       bar.setAttribute("rx", "4");
       bar.setAttribute("class", `atlyn-bar atlyn-${stage.valueState}${stage.highlighted ? "" : " atlyn-dimmed"}`);
       bar.setAttribute("data-stage-key", stage.key);
+      bar.setAttribute("data-value-state", stage.valueState);
+      bar.setAttribute("role", "button");
+      bar.setAttribute("tabindex", "0");
       bar.setAttribute("aria-label", this.stageAriaLabel(stage));
       bar.addEventListener("click", (event) => {
         this.selectStage(stage, event as MouseEvent);
       });
-      bar.addEventListener("mouseenter", (event) => this.showTooltip(stage, event.clientX, event.clientY, false));
-      bar.addEventListener("mouseleave", () => this.hideTooltip());
+      bar.addEventListener("keydown", (event) => this.navigateStage(index, event));
+      this.bindStagePointerInteractions(bar, stage);
       svg.appendChild(bar);
 
-      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("x", String(Math.max(width, 320) - 10));
-      label.setAttribute("y", String(y + rowHeight / 2));
-      label.setAttribute("text-anchor", this.localizer.direction === "rtl" ? "start" : "end");
-      label.setAttribute("class", "atlyn-chart-label");
-      label.textContent = `${stage.label} · ${this.localizer.number(stage.value)}`;
-      svg.appendChild(label);
+      if (stage.valueState !== "value") {
+        const marker = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        const markerWidth = stage.valueState === "zero" ? 8 : 14;
+        marker.setAttribute("x1", String((canvasWidth - markerWidth) / 2));
+        marker.setAttribute("x2", String((canvasWidth + markerWidth) / 2));
+        marker.setAttribute("y1", String(y + rowHeight / 2));
+        marker.setAttribute("y2", String(y + rowHeight / 2));
+        marker.setAttribute("class", `atlyn-state-marker atlyn-${stage.valueState}`);
+        marker.setAttribute("data-value-state", stage.valueState);
+        marker.setAttribute("aria-hidden", "true");
+        svg.appendChild(marker);
+      }
+
+      if (this.settings.labelsShow) {
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", String(this.localizer.direction === "rtl" ? 10 : canvasWidth - 10));
+        label.setAttribute("y", String(y + rowHeight / 2));
+        label.setAttribute("text-anchor", this.localizer.direction === "rtl" ? "start" : "end");
+        label.setAttribute("class", "atlyn-chart-label");
+        label.textContent = `${stage.label} · ${this.localizer.number(stage.value, undefined, stage.valueFormat)}`;
+        svg.appendChild(label);
+      }
     });
-    return svg;
+    chartScroll.appendChild(svg);
+    return chartScroll;
   }
 
   private createStageList(): HTMLDivElement {
@@ -308,32 +355,15 @@ export class Visual implements IVisual {
         button.classList.add("atlyn-dimmed");
       }
       button.dataset.stageKey = stage.key;
+      button.setAttribute("aria-posinset", String(index + 1));
+      button.setAttribute("aria-setsize", String(this.model.stages.length));
       button.setAttribute("aria-label", this.stageAriaLabel(stage));
       const groupLabel = stage.group ? `; ${this.localizer.text("group")}: ${stage.group}` : "";
-      const targetLabel = stage.target === null ? "" : `; ${this.localizer.text("target")}: ${this.localizer.number(stage.target)}`;
-      button.textContent = `${stage.label}: ${this.localizer.number(stage.value)}${groupLabel}; ${this.localizer.text("stageConversion")}: ${this.localizer.percent(stage.stageConversion)}; ${this.localizer.text("dropRate")}: ${this.localizer.percent(stage.dropRate)}; ${this.localizer.text("absoluteLoss")}: ${this.localizer.number(stage.absoluteLoss)}${targetLabel}`;
+      const targetLabel = stage.target === null ? "" : `; ${this.localizer.text("target")}: ${this.localizer.number(stage.target, undefined, stage.targetFormat)}`;
+      button.textContent = `${this.localizer.text("stage")}: ${stage.label}; ${this.localizer.text("value")}: ${this.localizer.number(stage.value, undefined, stage.valueFormat)}${groupLabel}; ${this.localizer.text("stageConversion")}: ${this.localizer.percent(stage.stageConversion)}; ${this.localizer.text("dropRate")}: ${this.localizer.percent(stage.dropRate)}; ${this.localizer.text("absoluteLoss")}: ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${targetLabel}`;
       button.addEventListener("click", (event) => this.selectStage(stage, event));
       button.addEventListener("keydown", (event) => this.navigateStage(index, event));
-      button.addEventListener("mouseenter", (event) => this.showTooltip(stage, event.clientX, event.clientY, false));
-      button.addEventListener("mouseleave", () => this.hideTooltip());
-      button.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        this.showContextMenu(stage, event.clientX, event.clientY);
-      });
-      let longPressTimer: ReturnType<typeof setTimeout> | undefined;
-      button.addEventListener("pointerdown", (event) => {
-        if (event.pointerType === "touch") {
-          this.cancelLongPress(longPressTimer);
-          longPressTimer = this.scheduleLongPress(stage, event.clientX, event.clientY);
-        }
-      });
-      const clearLongPress = (): void => {
-        this.cancelLongPress(longPressTimer);
-        longPressTimer = undefined;
-      };
-      button.addEventListener("pointerup", clearLongPress);
-      button.addEventListener("pointerleave", clearLongPress);
-      button.addEventListener("pointercancel", clearLongPress);
+      this.bindStagePointerInteractions(button, stage);
       item.appendChild(button);
       list.appendChild(item);
       this.stageButtons.push(button);
@@ -346,9 +376,10 @@ export class Visual implements IVisual {
     table.className = "atlyn-accessible-table";
     table.setAttribute("role", "table");
     table.setAttribute("aria-label", this.localizer.text("tableLabel"));
+    table.setAttribute("tabindex", "0");
     const headers = [
-      "Stage",
-      this.localizationManager?.getDisplayName("Value") || this.localizer.text("value"),
+      this.localizer.text("stage"),
+      this.getDisplayName("Role_Value_DisplayNameKey", this.localizer.text("value")),
       this.localizer.text("overallConversion"),
       this.localizer.text("stageConversion"),
       this.localizer.text("dropRate"),
@@ -370,12 +401,12 @@ export class Visual implements IVisual {
       const row = document.createElement("tr");
       [
         stage.label,
-        this.localizer.number(stage.value),
+        this.localizer.number(stage.value, undefined, stage.valueFormat),
         this.localizer.percent(stage.overallConversion),
         this.localizer.percent(stage.stageConversion),
         this.localizer.percent(stage.dropRate),
-        this.localizer.number(stage.absoluteLoss),
-        this.localizer.number(stage.target)
+        this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat),
+        this.localizer.number(stage.target, undefined, stage.targetFormat)
       ].forEach((value) => {
         const cell = document.createElement("td");
         cell.textContent = value;
@@ -421,10 +452,16 @@ export class Visual implements IVisual {
 
   private populateSelections(): void {
     this.selections.clear();
+    const groupedValues = this.valueColumns?.grouped?.() ?? [];
     this.model.stages.forEach((stage) => {
       const builder = this.host.createSelectionIdBuilder();
-      if (this.stageCategory) {
-        builder.withCategory(this.stageCategory, stage.modelIndex);
+      if (this.stageCategory && stage.categoryIndex >= 0) {
+        builder.withCategory(this.stageCategory, stage.categoryIndex);
+      }
+      if (this.groupCategory && stage.categoryIndex >= 0) {
+        builder.withCategory(this.groupCategory, stage.categoryIndex);
+      } else if (this.valueColumns && stage.seriesIndex !== null && groupedValues[stage.seriesIndex]) {
+        builder.withSeries(this.valueColumns, groupedValues[stage.seriesIndex]);
       }
       this.selections.set(stage.key, {
         stage,
@@ -434,58 +471,186 @@ export class Visual implements IVisual {
   }
 
   private showContextMenu(stage: FunnelStage | undefined, x: number, y: number): void {
-    const selectionId: ISelectionId | Record<string, never> = stage
-      ? this.selections.get(stage.key)?.id ?? {}
-      : {};
-    (this.selectionManager as unknown as ContextMenuManager).showContextMenu?.(selectionId, { x, y });
+    const selectionId = stage ? this.selections.get(stage.key)?.id : undefined;
+    this.selectionManager.showContextMenu(selectionId ?? ({} as ISelectionId), { x, y });
   }
 
   private showTooltip(stage: FunnelStage, x: number, y: number, isTouchEvent: boolean): void {
-    if (!this.tooltipService) {
+    if (!this.tooltipService || !this.tooltipsEnabled()) {
       return;
     }
-    const dataItems = [
-      { displayName: "Stage", value: stage.label },
-      { displayName: this.localizer.text("value"), value: this.localizer.number(stage.value) },
+    const dataItems: powerbi.extensibility.VisualTooltipDataItem[] = [
+      { displayName: this.localizer.text("stage"), value: stage.label },
+      { displayName: this.localizer.text("value"), value: this.localizer.number(stage.value, undefined, stage.valueFormat) },
       { displayName: this.localizer.text("overallConversion"), value: this.localizer.percent(stage.overallConversion) },
       { displayName: this.localizer.text("stageConversion"), value: this.localizer.percent(stage.stageConversion) },
       { displayName: this.localizer.text("dropRate"), value: this.localizer.percent(stage.dropRate) },
-      { displayName: this.localizer.text("absoluteLoss"), value: this.localizer.number(stage.absoluteLoss) }
+      { displayName: this.localizer.text("absoluteLoss"), value: this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat) }
     ];
     if (stage.target !== null) {
-      dataItems.push({ displayName: this.localizer.text("target"), value: this.localizer.number(stage.target) });
+      dataItems.push({ displayName: this.localizer.text("target"), value: this.localizer.number(stage.target, undefined, stage.targetFormat) });
     }
     if (stage.group) {
       dataItems.push({ displayName: this.localizer.text("group"), value: stage.group });
     }
-    stage.tooltipValues.forEach((tooltip) => dataItems.push({ displayName: tooltip.label, value: String(tooltip.value ?? "") }));
+    stage.tooltipValues.forEach((tooltip) =>
+      dataItems.push({
+        displayName: tooltip.label,
+        value:
+          typeof tooltip.value === "number"
+            ? this.localizer.number(tooltip.value, undefined, tooltip.format)
+            : String(tooltip.value ?? "")
+      })
+    );
     const selectionId = this.selections.get(stage.key)?.id;
     this.tooltipService.show({
       dataItems,
       identities: selectionId ? [selectionId] : [],
       coordinates: [x, y],
       isTouchEvent
-    } as never);
+    });
+    this.tooltipStageKey = stage.key;
+    this.tooltipIsTouch = isTouchEvent;
   }
 
-  private hideTooltip(): void {
-    this.tooltipService?.hide({
+  private moveTooltip(stage: FunnelStage, x: number, y: number, isTouchEvent: boolean): void {
+    if (!this.tooltipService || !this.tooltipsEnabled()) {
+      return;
+    }
+    if (this.tooltipStageKey !== stage.key) {
+      this.showTooltip(stage, x, y, isTouchEvent);
+      return;
+    }
+    const selectionId = this.selections.get(stage.key)?.id;
+    this.tooltipService.move({
+      coordinates: [x, y],
+      identities: selectionId ? [selectionId] : [],
+      isTouchEvent
+    });
+  }
+
+  private hideTooltip(isTouchEvent = this.tooltipIsTouch): void {
+    if (!this.tooltipService || !this.tooltipStageKey) {
+      return;
+    }
+    this.tooltipService.hide({
       immediately: false,
-      isTouchEvent: false
-    } as never);
+      isTouchEvent
+    });
+    this.tooltipStageKey = undefined;
+    this.tooltipIsTouch = false;
+  }
+
+  private tooltipsEnabled(): boolean {
+    return typeof this.tooltipService?.enabled !== "function" || this.tooltipService.enabled();
+  }
+
+  private bindStagePointerInteractions(element: Element, stage: FunnelStage): void {
+    let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+    let touchStartX: number | undefined;
+    let touchStartY: number | undefined;
+    const clearLongPress = (): void => {
+      this.cancelLongPress(longPressTimer);
+      longPressTimer = undefined;
+    };
+    const clearTouchStart = (): void => {
+      touchStartX = undefined;
+      touchStartY = undefined;
+    };
+
+    element.addEventListener("contextmenu", (event) => {
+      const pointerEvent = event as MouseEvent;
+      pointerEvent.preventDefault();
+      pointerEvent.stopPropagation();
+      this.showContextMenu(stage, pointerEvent.clientX, pointerEvent.clientY);
+    });
+    element.addEventListener("pointerenter", (event) => {
+      const pointerEvent = event as PointerEvent;
+      if (pointerEvent.pointerType !== "touch") {
+        this.showTooltip(stage, pointerEvent.clientX, pointerEvent.clientY, false);
+      }
+    });
+    element.addEventListener("pointermove", (event) => {
+      const pointerEvent = event as PointerEvent;
+      if (
+        pointerEvent.pointerType === "touch" &&
+        touchStartX !== undefined &&
+        touchStartY !== undefined &&
+        Math.hypot(pointerEvent.clientX - touchStartX, pointerEvent.clientY - touchStartY) > 8
+      ) {
+        clearLongPress();
+      }
+      this.moveTooltip(stage, pointerEvent.clientX, pointerEvent.clientY, pointerEvent.pointerType === "touch");
+    });
+    element.addEventListener("pointerleave", () => {
+      if (!this.tooltipIsTouch) {
+        this.hideTooltip();
+      }
+      clearLongPress();
+      clearTouchStart();
+    });
+    element.addEventListener("pointerdown", (event) => {
+      const pointerEvent = event as PointerEvent;
+      if (pointerEvent.pointerType === "touch") {
+        clearLongPress();
+        touchStartX = pointerEvent.clientX;
+        touchStartY = pointerEvent.clientY;
+        this.showTooltip(stage, pointerEvent.clientX, pointerEvent.clientY, true);
+        longPressTimer = this.scheduleLongPress(stage, pointerEvent.clientX, pointerEvent.clientY);
+      }
+    });
+    element.addEventListener("pointerup", (event) => {
+      const pointerEvent = event as PointerEvent;
+      clearLongPress();
+      if (pointerEvent.pointerType === "touch") {
+        this.hideTooltip(true);
+      }
+      clearTouchStart();
+    });
+    element.addEventListener("pointercancel", () => {
+      clearLongPress();
+      this.hideTooltip(true);
+      clearTouchStart();
+    });
   }
 
   private clearSelection(): void {
     this.selectionManager.clear();
   }
 
+  private applyVisualStyles(): void {
+    const highContrast = Boolean(this.host.colorPalette?.isHighContrast);
+    if (highContrast) {
+      const foreground = this.host.colorPalette.foreground?.value ?? "CanvasText";
+      const background = this.host.colorPalette.background?.value ?? "Canvas";
+      this.root.style.setProperty("--atlyn-primary", foreground);
+      this.root.style.setProperty("--atlyn-text", foreground);
+      this.root.style.setProperty("--atlyn-muted", foreground);
+      this.root.style.setProperty("--atlyn-warning", foreground);
+      this.root.style.setProperty("--atlyn-surface", background);
+      this.root.style.setProperty("--atlyn-border", foreground);
+    } else {
+      this.root.style.setProperty("--atlyn-primary", this.settings.dataPointFill);
+      ["--atlyn-text", "--atlyn-muted", "--atlyn-warning", "--atlyn-surface", "--atlyn-border"].forEach((property) => {
+        this.root.style.removeProperty(property);
+      });
+    }
+  }
+
   private stageAriaLabel(stage: FunnelStage): string {
     const group = stage.group ? `, ${this.localizer.text("group")} ${stage.group}` : "";
-    const target = stage.target === null ? "" : `, ${this.localizer.text("target")} ${this.localizer.number(stage.target)}`;
-    return `${stage.label}, ${this.localizer.text("value")} ${this.localizer.number(stage.value)}${group}, ${this.localizer.text("overallConversion")} ${this.localizer.percent(stage.overallConversion)}, ${this.localizer.text("stageConversion")} ${this.localizer.percent(stage.stageConversion)}, ${this.localizer.text("dropRate")} ${this.localizer.percent(stage.dropRate)}, ${this.localizer.text("absoluteLoss")} ${this.localizer.number(stage.absoluteLoss)}${target}`;
+    const target = stage.target === null ? "" : `, ${this.localizer.text("target")} ${this.localizer.number(stage.target, undefined, stage.targetFormat)}`;
+    const state =
+      stage.valueState === "negative"
+        ? `, ${this.localizer.text("negativeValue")}`
+        : stage.valueState === "blank"
+          ? `, ${this.localizer.text("blankValue")}`
+          : "";
+    return `${this.localizer.text("stage")} ${stage.label}, ${this.localizer.text("value")} ${this.localizer.number(stage.value, undefined, stage.valueFormat)}${group}${state}, ${this.localizer.text("overallConversion")} ${this.localizer.percent(stage.overallConversion)}, ${this.localizer.text("stageConversion")} ${this.localizer.percent(stage.stageConversion)}, ${this.localizer.text("dropRate")} ${this.localizer.percent(stage.dropRate)}, ${this.localizer.text("absoluteLoss")} ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${target}`;
   }
 
   private clearChildren(): void {
+    this.hideTooltip();
     this.clearLongPressTimers();
     this.selections.clear();
     while (this.root.firstChild) {

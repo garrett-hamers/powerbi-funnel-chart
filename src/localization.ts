@@ -1,8 +1,10 @@
+import { valueFormatter } from "powerbi-visuals-utils-formattingutils";
+
 export interface Localizer {
   locale: string;
   direction: "ltr" | "rtl";
   text(key: string, fallback?: string): string;
-  number(value: number | null, options?: Intl.NumberFormatOptions): string;
+  number(value: number | null, options?: Intl.NumberFormatOptions, format?: string): string;
   percent(value: number | null): string;
 }
 
@@ -10,6 +12,8 @@ type Messages = Record<string, string>;
 
 const translations: Record<string, Messages> = {
   en: {
+    title: "Atlyn Funnel",
+    stage: "Stage",
     value: "Value",
     overallConversion: "Overall conversion",
     stageConversion: "Stage conversion",
@@ -32,11 +36,15 @@ const translations: Record<string, Messages> = {
     negativeValue: "Negative value: the funnel is not a conventional conversion sequence.",
     zeroBaseline: "Zero baseline: conversion ratios are unavailable.",
     stageLimit: "Stage limit reached: only the ordered window is shown.",
+    partialData: "Partial data: conversion metrics describe the supplied segment only.",
+    blank: "(Blank)",
     zero: "Zero",
     selected: "Selected",
     notAvailable: "Not available"
   },
   es: {
+    title: "Atlyn Funnel",
+    stage: "Etapa",
     value: "Valor",
     overallConversion: "Conversión total",
     stageConversion: "Conversión de etapa",
@@ -58,9 +66,13 @@ const translations: Record<string, Messages> = {
     blankValue: "Valor en blanco.",
     negativeValue: "Valor negativo: no es una secuencia de conversión convencional.",
     zeroBaseline: "Base cero: las proporciones de conversión no están disponibles.",
-    stageLimit: "Límite de etapas alcanzado: solo se muestra la ventana ordenada."
+    stageLimit: "Límite de etapas alcanzado: solo se muestra la ventana ordenada.",
+    partialData: "Datos parciales: las métricas describen solo el segmento suministrado.",
+    blank: "(En blanco)"
   },
   fr: {
+    title: "Atlyn Funnel",
+    stage: "Étape",
     value: "Valeur",
     overallConversion: "Conversion globale",
     stageConversion: "Conversion de l'étape",
@@ -82,9 +94,13 @@ const translations: Record<string, Messages> = {
     blankValue: "Valeur vide.",
     negativeValue: "Valeur négative : la séquence n'est pas une conversion conventionnelle.",
     zeroBaseline: "Base zéro : les ratios de conversion sont indisponibles.",
-    stageLimit: "Limite d'étapes atteinte : seule la fenêtre ordonnée est affichée."
+    stageLimit: "Limite d'étapes atteinte : seule la fenêtre ordonnée est affichée.",
+    partialData: "Données partielles : les mesures décrivent uniquement le segment fourni.",
+    blank: "(Vide)"
   },
   de: {
+    title: "Atlyn Funnel",
+    stage: "Stufe",
     value: "Wert",
     overallConversion: "Gesamtkonversion",
     stageConversion: "Stufenkonversion",
@@ -106,9 +122,13 @@ const translations: Record<string, Messages> = {
     blankValue: "Leerer Wert.",
     negativeValue: "Negativer Wert: kein konventioneller Konversionstrichter.",
     zeroBaseline: "Nullbasis: Konversionsverhältnisse sind nicht verfügbar.",
-    stageLimit: "Stufenlimit erreicht: Nur das geordnete Fenster wird angezeigt."
+    stageLimit: "Stufenlimit erreicht: Nur das geordnete Fenster wird angezeigt.",
+    partialData: "Unvollständige Daten: Die Metriken beschreiben nur das bereitgestellte Segment.",
+    blank: "(Leer)"
   },
   ar: {
+    title: "Atlyn Funnel",
+    stage: "المرحلة",
     value: "القيمة",
     overallConversion: "التحويل الإجمالي",
     stageConversion: "تحويل المرحلة",
@@ -131,6 +151,8 @@ const translations: Record<string, Messages> = {
     negativeValue: "قيمة سالبة: هذا ليس مسار تحويل تقليديًا.",
     zeroBaseline: "خط أساس صفري: نسب التحويل غير متاحة.",
     stageLimit: "تم بلوغ حد المراحل: يتم عرض النافذة المرتبة فقط.",
+    partialData: "بيانات جزئية: تصف المقاييس المقطع المقدم فقط.",
+    blank: "(فارغ)",
     notAvailable: "غير متاح"
   }
 };
@@ -146,10 +168,12 @@ export const createLocalizer = (requestedLocale?: string): Localizer => {
     locale,
     direction: rtlLocales.test(locale) ? "rtl" : "ltr",
     text: (key, fallback) => messages[key] ?? translations.en[key] ?? fallback ?? key,
-    number: (value, options) =>
+    number: (value, options, format) =>
       value === null || !Number.isFinite(value)
         ? (messages.notAvailable ?? translations.en.notAvailable)
-        : new Intl.NumberFormat(formatterLocale, options).format(value),
+        : format
+          ? valueFormatter.format(value, format, true, formatterLocale)
+          : new Intl.NumberFormat(formatterLocale, options).format(value),
     percent: (value) =>
       value === null || !Number.isFinite(value)
         ? (messages.notAvailable ?? translations.en.notAvailable)
@@ -181,6 +205,8 @@ export const warningTextKey = (code: string): string => {
       return "zeroBaseline";
     case "stage-limit":
       return "stageLimit";
+    case "partial-data":
+      return "partialData";
     default:
       return "warning";
   }

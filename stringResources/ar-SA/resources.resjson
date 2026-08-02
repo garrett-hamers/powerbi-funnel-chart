@@ -1,0 +1,22 @@
+{
+  "Role_Stage_DisplayNameKey": "المرحلة",
+  "Role_Stage_DescriptionKey": "مرحلة العملية المرتبة",
+  "Role_Value_DisplayNameKey": "القيمة",
+  "Role_Value_DescriptionKey": "حجم المرحلة أو مبلغها",
+  "Role_StageOrder_DisplayNameKey": "ترتيب المرحلة",
+  "Role_StageOrder_DescriptionKey": "ترتيب رقمي اختياري؛ يتم تشخيص حالات التعادل",
+  "Role_Target_DisplayNameKey": "الهدف",
+  "Role_Target_DescriptionKey": "معيار اختياري لكل مرحلة",
+  "Role_Group_DisplayNameKey": "المجموعة",
+  "Role_Group_DescriptionKey": "شريحة اختيارية",
+  "Role_Tooltips_DisplayNameKey": "تلميحات الأدوات",
+  "Role_Tooltips_DescriptionKey": "حقول تفاصيل اختيارية (حتى خمسة)",
+  "FormatCard_DisplayNameKey": "مسار التحويل",
+  "FormatCard_DescriptionKey": "تكوين مظهر مسار التحويل.",
+  "Object_DataPoint_DisplayNameKey": "نقاط البيانات",
+  "Property_DataPointFill_DisplayNameKey": "التعبئة",
+  "Property_DataPointFill_DescriptionKey": "اللون المستخدم لنقاط البيانات الموجبة.",
+  "Object_Labels_DisplayNameKey": "التسميات",
+  "Property_LabelsShow_DisplayNameKey": "إظهار تسميات المخطط",
+  "Property_LabelsShow_DescriptionKey": "إظهار تسميات المراحل وقيمها على المخطط."
+}

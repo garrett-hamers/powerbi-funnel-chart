@@ -17,6 +17,9 @@ shows an inferred-order warning. It never alphabetically sorts, sorts by value, 
 top-reduces an intermediate stage. Zero and blank values remain distinct. The visual
 shows overall conversion, stage conversion, drop rate, absolute loss, target, and
 diagnostics for duplicate ordering, blanks, negative values, and nonmonotonic data.
+The visual displays an ordered window of up to 50 stages per group and reports omitted
+rows when the host supplies more data; segmented host data is labeled partial. Measure
+format strings are honored in chart labels, the accessible table, and tooltips.
 
 ## Development
 

@@ -21,15 +21,29 @@ const makeHost = (): {
   selected: jest.Mock;
   started: jest.Mock;
   finished: jest.Mock;
+  failed: jest.Mock;
   contextMenu: jest.Mock;
+  tooltipShown: jest.Mock;
+  tooltipMoved: jest.Mock;
+  tooltipHidden: jest.Mock;
+  selectionBuilders: Array<{ withCategory: jest.Mock; withSeries: jest.Mock }>;
 } => {
   const selected = jest.fn();
   const started = jest.fn();
   const finished = jest.fn();
+  const failed = jest.fn();
   const contextMenu = jest.fn();
+  const tooltipShown = jest.fn();
+  const tooltipMoved = jest.fn();
+  const tooltipHidden = jest.fn();
+  const selectionBuilders: Array<{ withCategory: jest.Mock; withSeries: jest.Mock }> = [];
   const host = {
     locale: "en-US",
-    colorPalette: { isHighContrast: false },
+    colorPalette: {
+      isHighContrast: false,
+      foreground: { value: "#111111" },
+      background: { value: "#ffffff" }
+    },
     createSelectionManager: () => ({
       select: selected,
       clear: jest.fn(),
@@ -38,21 +52,38 @@ const makeHost = (): {
     createSelectionIdBuilder: () => {
       const builder = {
         withCategory: jest.fn().mockReturnThis(),
-        createSelectionId: () => ({ key: "stage" })
+        withSeries: jest.fn().mockReturnThis(),
+        createSelectionId: () => ({
+          key: `${builder.withCategory.mock.calls.length}:${builder.withSeries.mock.calls.length}`
+        })
       };
+      selectionBuilders.push(builder);
       return builder;
     },
     tooltipService: {
-      show: jest.fn(),
-      hide: jest.fn()
+      enabled: jest.fn(() => true),
+      show: tooltipShown,
+      move: tooltipMoved,
+      hide: tooltipHidden
     },
     eventService: {
       renderingStarted: started,
       renderingFinished: finished,
-      renderingFailed: jest.fn()
+      renderingFailed: failed
     }
   };
-  return { host, selected, started, finished, contextMenu };
+  return {
+    host,
+    selected,
+    started,
+    finished,
+    failed,
+    contextMenu,
+    tooltipShown,
+    tooltipMoved,
+    tooltipHidden,
+    selectionBuilders
+  };
 };
 
 describe("Atlyn Funnel visual lifecycle and interactions", () => {
@@ -71,6 +102,67 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     expect(element.querySelector(".atlyn-stage-button.atlyn-dimmed")).not.toBeNull();
   });
 
+  test("reads persisted formatting metadata, exposes a real formatting model, and renders it", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({
+      dataViews: [{
+        ...input,
+        metadata: {
+          objects: {
+            dataPoint: { fill: { solid: { color: "#d946ef" } } },
+            labels: { show: false }
+          }
+        }
+      }],
+      viewport: { width: 640, height: 480 }
+    } as never);
+
+    const model = visual.getFormattingModel();
+    expect(model.cards).toHaveLength(1);
+    expect((element.querySelector(".atlyn-funnel") as HTMLElement | null)?.style.getPropertyValue("--atlyn-primary")).toBe("#d946ef");
+    expect(element.querySelectorAll(".atlyn-chart-label")).toHaveLength(0);
+    expect(visual.enumerateObjectInstances({ objectName: "labels" } as never)).toEqual([
+      expect.objectContaining({ properties: { show: false } })
+    ]);
+    visual.destroy();
+  });
+
+  test("applies measure format strings to rendered values", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const formattedInput: DataViewLike = {
+      ...input,
+      categorical: {
+        ...input.categorical,
+        values: input.categorical?.values?.map((column, index) =>
+          index === 0
+            ? { ...column, source: { ...column.source, format: "$#,0.00" } }
+            : column
+        )
+      }
+    };
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [formattedInput], viewport: { width: 640, height: 480 } } as never);
+    expect(element.textContent).toContain("$100.00");
+    visual.destroy();
+  });
+
+  test("honors host interaction capability flags", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    mocks.host.hostCapabilities = { allowInteractions: false };
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    element.querySelector<HTMLButtonElement>(".atlyn-stage-button")?.click();
+    expect(mocks.selected).not.toHaveBeenCalled();
+    visual.destroy();
+  });
+
   test("uses an empty selection object for background context menus", () => {
     const element = document.createElement("div");
     document.body.appendChild(element);
@@ -83,6 +175,152 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
       clientY: 20
     }));
     expect(mocks.contextMenu).toHaveBeenCalledWith({}, { x: 10, y: 20 });
+    visual.destroy();
+  });
+
+  test("uses composite group and stage identities for data-point context menus", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({
+      dataViews: [{
+        categorical: {
+          categories: [
+            {
+              source: { roles: { Stage: true }, displayName: "Stage" },
+              values: ["Lead", "Lead"]
+            },
+            {
+              source: { roles: { Group: true }, displayName: "Group" },
+              values: ["North", "South"]
+            }
+          ],
+          values: [{
+            source: { roles: { Value: true }, displayName: "Value" },
+            values: [100, 80]
+          }]
+        }
+      }],
+      viewport: { width: 640, height: 480 }
+    } as never);
+
+    expect(mocks.selectionBuilders).toHaveLength(2);
+    expect(mocks.selectionBuilders.every((builder) => Boolean(builder.withCategory))).toBe(true);
+    expect(mocks.selectionBuilders[0].withCategory).toHaveBeenCalledTimes(2);
+    const firstBar = element.querySelector("rect");
+    firstBar?.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      clientX: 12,
+      clientY: 24
+    }));
+    expect(mocks.contextMenu).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "2:0" }),
+      { x: 12, y: 24 }
+    );
+    visual.destroy();
+  });
+
+  test("shows, moves, hides, and long-presses tooltips on stage bars", () => {
+    jest.useFakeTimers();
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    const bar = element.querySelector("rect");
+    expect(bar).not.toBeNull();
+    const pointer = (type: string, pointerType: string, x: number, y: number): Event => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperties(event, {
+        pointerType: { value: pointerType },
+        clientX: { value: x },
+        clientY: { value: y }
+      });
+      return event;
+    };
+    bar?.dispatchEvent(pointer("pointerenter", "mouse", 10, 20));
+    expect(mocks.tooltipShown).toHaveBeenCalled();
+    bar?.dispatchEvent(pointer("pointermove", "mouse", 14, 24));
+    expect(mocks.tooltipMoved).toHaveBeenCalledWith(expect.objectContaining({
+      coordinates: [14, 24],
+      isTouchEvent: false
+    }));
+    bar?.dispatchEvent(pointer("pointerleave", "mouse", 14, 24));
+    expect(mocks.tooltipHidden).toHaveBeenCalled();
+
+    bar?.dispatchEvent(pointer("pointerdown", "touch", 30, 40));
+    jest.advanceTimersByTime(650);
+    expect(mocks.contextMenu).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "1:0" }),
+      { x: 30, y: 40 }
+    );
+    bar?.dispatchEvent(pointer("pointerup", "touch", 30, 40));
+    visual.destroy();
+    jest.useRealTimers();
+  });
+
+  test("keeps long ordered funnels scrollable and exposes negative values without positive bars", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    const stages = Array.from({ length: 49 }, (_, index) => `Stage ${index}`);
+    visual.update({
+      dataViews: [{
+        categorical: {
+          categories: [{
+            source: { roles: { Stage: true }, displayName: "Stage" },
+            values: [...stages, "Negative"]
+          }],
+          values: [{
+            source: { roles: { Value: true }, displayName: "Value" },
+            values: [...stages.map(() => 100), -5]
+          }]
+        }
+      }],
+      viewport: { width: 640, height: 480 }
+    } as never);
+    const svg = element.querySelector("svg");
+    expect(element.querySelector(".atlyn-chart-scroll")).not.toBeNull();
+    expect(Number(svg?.getAttribute("height"))).toBeGreaterThan(440);
+    expect(element.querySelector('rect[data-value-state="negative"]')?.getAttribute("width")).toBe("0");
+    expect(element.querySelector('line[data-value-state="negative"]')).not.toBeNull();
+    visual.destroy();
+  });
+
+  test("uses host high-contrast colors and correct RTL label geometry", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    mocks.host.locale = "ar-SA";
+    mocks.host.colorPalette = {
+      isHighContrast: true,
+      foreground: { value: "#ffff00" },
+      background: { value: "#000000" }
+    };
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    const root = element.querySelector(".atlyn-funnel") as HTMLElement | null;
+    expect(root?.style.getPropertyValue("--atlyn-primary")).toBe("#ffff00");
+    expect(root?.getAttribute("dir")).toBe("rtl");
+    expect(element.querySelector(".atlyn-chart-label")?.getAttribute("x")).toBe("10");
+    expect(element.querySelector(".atlyn-chart-label")?.getAttribute("text-anchor")).toBe("start");
+    visual.destroy();
+  });
+
+  test("reports rendering failures instead of a false successful completion", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    mocks.host.createSelectionIdBuilder = (): never => {
+      throw new Error("selection builder failure");
+    };
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    expect(mocks.started).toHaveBeenCalledTimes(1);
+    expect(mocks.finished).not.toHaveBeenCalled();
+    expect(mocks.failed).toHaveBeenCalledWith(expect.anything(), "selection builder failure");
     visual.destroy();
   });
 
@@ -148,6 +386,31 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     visual.destroy();
     jest.advanceTimersByTime(700);
     expect(mocks.contextMenu).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  test("cancels a touch context menu when a stage starts scrolling", () => {
+    jest.useFakeTimers();
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    const button = element.querySelector<HTMLButtonElement>(".atlyn-stage-button");
+    const pointer = (type: string, x: number, y: number): Event => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperties(event, {
+        pointerType: { value: "touch" },
+        clientX: { value: x },
+        clientY: { value: y }
+      });
+      return event;
+    };
+    button?.dispatchEvent(pointer("pointerdown", 10, 10));
+    button?.dispatchEvent(pointer("pointermove", 10, 24));
+    jest.advanceTimersByTime(700);
+    expect(mocks.contextMenu).not.toHaveBeenCalled();
+    visual.destroy();
     jest.useRealTimers();
   });
 });

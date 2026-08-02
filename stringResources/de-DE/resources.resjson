@@ -1,0 +1,22 @@
+{
+  "Role_Stage_DisplayNameKey": "Stufe",
+  "Role_Stage_DescriptionKey": "Geordnete Prozessstufe",
+  "Role_Value_DisplayNameKey": "Wert",
+  "Role_Value_DescriptionKey": "Volumen oder Betrag der Stufe",
+  "Role_StageOrder_DisplayNameKey": "Stufenreihenfolge",
+  "Role_StageOrder_DescriptionKey": "Optionale numerische Reihenfolge; Gleichstände werden diagnostiziert",
+  "Role_Target_DisplayNameKey": "Ziel",
+  "Role_Target_DescriptionKey": "Optionaler Vergleichswert für jede Stufe",
+  "Role_Group_DisplayNameKey": "Gruppe",
+  "Role_Group_DescriptionKey": "Optionales Segment",
+  "Role_Tooltips_DisplayNameKey": "Tooltips",
+  "Role_Tooltips_DescriptionKey": "Optionale Detailfelder (bis zu fünf)",
+  "FormatCard_DisplayNameKey": "Trichter",
+  "FormatCard_DescriptionKey": "Konfigurieren Sie die Darstellung des Trichters.",
+  "Object_DataPoint_DisplayNameKey": "Datenpunkte",
+  "Property_DataPointFill_DisplayNameKey": "Füllung",
+  "Property_DataPointFill_DescriptionKey": "Farbe für positive Datenpunkte.",
+  "Object_Labels_DisplayNameKey": "Beschriftungen",
+  "Property_LabelsShow_DisplayNameKey": "Diagrammbeschriftungen anzeigen",
+  "Property_LabelsShow_DescriptionKey": "Stufenbeschriftungen und Werte im Diagramm anzeigen."
+}

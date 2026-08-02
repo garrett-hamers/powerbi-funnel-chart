@@ -1,4 +1,5 @@
 const path = require("path");
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
 module.exports = {
   entry: "./src/visual.ts",
@@ -16,6 +17,13 @@ module.exports = {
           }
         },
         exclude: /node_modules/
+      },
+      {
+        test: /\.css$/i,
+        use: [
+          MiniCssExtractPlugin.loader,
+          "css-loader"
+        ]
       }
     ]
   },
@@ -28,6 +36,9 @@ module.exports = {
   externals: {
     "powerbi-visuals-api": "powerbi"
   },
+  plugins: [
+    new MiniCssExtractPlugin({ filename: "visual.css" })
+  ],
   devtool: false,
   performance: {
     hints: false
