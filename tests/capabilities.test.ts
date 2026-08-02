@@ -37,6 +37,9 @@ describe("certification-first package metadata", () => {
     const categories = capabilities.dataViewMappings[0].categorical.categories;
     expect(categories.dataReductionAlgorithm.window.count).toBe(50);
     expect(categories.select.some((item) => "dataReductionAlgorithm" in item)).toBe(false);
+    expect(categories.select).toEqual(expect.arrayContaining([
+      expect.objectContaining({ for: { in: "Tooltips" } })
+    ]));
     expect(JSON.stringify(capabilities)).not.toMatch(/"top"|sortBy|orderBy/i);
   });
 
@@ -47,6 +50,12 @@ describe("certification-first package metadata", () => {
     const condition = capabilities.dataViewMappings[0].conditions[0];
     expect(condition.Stage.min).toBe(1);
     expect(condition.Value.min).toBe(1);
+  });
+
+  test("does not advertise a landing page that the visual does not implement", () => {
+    const capabilities = JSON.parse(fs.readFileSync("capabilities.json", "utf8")) as Record<string, unknown>;
+    expect(capabilities).not.toHaveProperty("supportsLandingPage");
+    expect(capabilities.supportsEmptyDataView).toBe(true);
   });
 
   test("declares every formatting-model setting and localized display key", () => {
@@ -74,11 +83,12 @@ describe("certification-first package metadata", () => {
 
   test("enforces the certification lint and full audit gates", () => {
     const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8")) as {
-      scripts: { eslint: string; audit: string };
+      scripts: { eslint: string; audit: string; "certification-audit": string };
       devDependencies: Record<string, string>;
     };
     expect(packageJson.scripts.eslint).toBe("npx eslint . --ext .js,.jsx,.ts,.tsx");
     expect(packageJson.scripts.audit).toBe("npm audit");
+    expect(packageJson.scripts["certification-audit"]).toBe("node scripts/certification-audit.cjs");
     expect(packageJson.devDependencies["eslint-plugin-powerbi-visuals"]).toBeDefined();
     expect(fs.readFileSync("eslint.config.cjs", "utf8")).toContain("powerbiVisuals.configs.recommended");
   });

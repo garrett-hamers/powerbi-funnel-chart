@@ -15,6 +15,7 @@ import "./style.css";
 const MAX_BAR_WIDTH = 420;
 const MIN_CHART_HEIGHT = 220;
 const ROW_HEIGHT = 42;
+const MIN_VIEWPORT_SIZE = 0;
 
 interface StageSelection {
   id?: ISelectionId;
@@ -53,6 +54,8 @@ export class Visual implements IVisual {
   private renderVersion = 0;
   private tooltipStageKey?: string;
   private tooltipIsTouch = false;
+  private focusedStageKey?: string;
+  private focusedTable = false;
 
   public constructor(options?: VisualConstructorOptions) {
     if (!options) {
@@ -108,12 +111,16 @@ export class Visual implements IVisual {
       this.valueColumns = dataView?.categorical?.values;
       this.settings = readFunnelSettings(dataView as unknown as DataViewLike);
       this.model = buildFunnelModel(dataView as unknown as DataViewLike, {
-        blankLabel: this.localizer.text("blank", "(Blank)")
+        blankLabel: this.localizer.text("blank", "(Blank)"),
+        partialData: options.operationKind === powerbi.VisualDataChangeOperationKind.Segment
       });
-      this.render(options.viewport.width, options.viewport.height);
+      this.render(
+        this.safeDimension(options.viewport.width),
+        this.safeDimension(options.viewport.height)
+      );
       this.eventService.renderingFinished(options);
     } catch (error) {
-      this.renderEmpty(this.localizer.text("noData"));
+      this.renderEmpty(this.localizer.text("renderError", "The funnel could not be rendered."), "error");
       const reason = error instanceof Error ? error.message : "ATLYN_RENDER_FAILED";
       this.eventService.renderingFailed(options, reason);
     }
@@ -161,9 +168,18 @@ export class Visual implements IVisual {
     this.setStateAttribute("data-compact", width < 480 || height < 320);
     this.root.style.width = `${Math.max(0, width)}px`;
     this.root.style.height = `${Math.max(0, height)}px`;
+    this.root.removeAttribute("data-state");
+    this.root.setAttribute("aria-busy", "true");
+    this.captureFocus();
     this.clearChildren();
     if (this.model.stages.length === 0) {
-      this.renderEmpty(this.localizer.text("noData"));
+      const missingRole = this.model.warnings.find((warning) =>
+        warning.code === "missing-stage" || warning.code === "missing-value"
+      );
+      this.renderEmpty(
+        missingRole ? this.localizer.text(warningTextKey(missingRole.code), missingRole.message) : this.localizer.text("noData"),
+        "empty"
+      );
       return;
     }
 
@@ -177,6 +193,12 @@ export class Visual implements IVisual {
     this.root.appendChild(this.createChart(width, height));
     this.root.appendChild(this.createStageList());
     this.root.appendChild(this.createAccessibleTable());
+    this.root.setAttribute("aria-busy", "false");
+    this.restoreFocus();
+  }
+
+  private safeDimension(value: number): number {
+    return Number.isFinite(value) && value >= MIN_VIEWPORT_SIZE ? value : MIN_VIEWPORT_SIZE;
   }
 
   private createSummary(): HTMLDivElement {
@@ -216,7 +238,11 @@ export class Visual implements IVisual {
     heading.textContent = `${this.localizer.text("warning")}:`;
     panel.appendChild(heading);
     const list = document.createElement("ul");
-    warnings.slice(0, 8).forEach((warning) => {
+    const prioritizedWarnings = [
+      ...warnings.filter((warning) => warning.code === "partial-data" || warning.code === "stage-limit"),
+      ...warnings.filter((warning) => warning.code !== "partial-data" && warning.code !== "stage-limit")
+    ];
+    prioritizedWarnings.slice(0, 8).forEach((warning) => {
       const item = document.createElement("li");
       item.textContent = `${this.localizer.text(warningTextKey(warning.code), warning.message)}${warning.group ? ` (${warning.group})` : ""}`;
       list.appendChild(item);
@@ -231,6 +257,17 @@ export class Visual implements IVisual {
     chartScroll.setAttribute("role", "region");
     chartScroll.setAttribute("aria-label", this.localizer.text("stageListLabel"));
     chartScroll.style.maxHeight = `${Math.max(150, Math.floor(height * 0.55))}px`;
+    chartScroll.addEventListener("click", (event) => {
+      if (event.target === chartScroll && this.interactionsEnabled) {
+        this.clearSelection();
+      }
+    });
+    chartScroll.addEventListener("contextmenu", (event) => {
+      if (event.target === chartScroll && this.interactionsEnabled) {
+        event.preventDefault();
+        this.showContextMenu(undefined, event.clientX, event.clientY);
+      }
+    });
 
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("atlyn-chart");
@@ -239,9 +276,17 @@ export class Visual implements IVisual {
     svg.setAttribute("viewBox", `0 0 ${canvasWidth} ${chartHeight}`);
     svg.setAttribute("height", String(chartHeight));
     svg.style.height = `${chartHeight}px`;
-    svg.setAttribute("role", "img");
+    svg.setAttribute("role", "group");
     svg.setAttribute("aria-label", this.localizer.text("stageListLabel"));
+    svg.addEventListener("click", (event) => {
+      if (event.target === svg && this.interactionsEnabled) {
+        this.clearSelection();
+      }
+    });
     svg.addEventListener("contextmenu", (event) => {
+      if (!this.interactionsEnabled) {
+        return;
+      }
       event.preventDefault();
       this.showContextMenu(undefined, event.clientX, event.clientY);
     });
@@ -279,7 +324,7 @@ export class Visual implements IVisual {
 
       if (stage.valueState !== "value") {
         const marker = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        const markerWidth = stage.valueState === "zero" ? 8 : 14;
+        const markerWidth = stage.valueState === "zero" ? 8 : stage.valueState === "invalid" ? 18 : 14;
         marker.setAttribute("x1", String((canvasWidth - markerWidth) / 2));
         marker.setAttribute("x2", String((canvasWidth + markerWidth) / 2));
         marker.setAttribute("y1", String(y + rowHeight / 2));
@@ -296,7 +341,7 @@ export class Visual implements IVisual {
         label.setAttribute("y", String(y + rowHeight / 2));
         label.setAttribute("text-anchor", this.localizer.direction === "rtl" ? "start" : "end");
         label.setAttribute("class", "atlyn-chart-label");
-        label.textContent = `${stage.label} · ${this.localizer.number(stage.value, undefined, stage.valueFormat)}`;
+        label.textContent = `${this.stageLabel(stage, index)} · ${this.localizer.number(stage.value, undefined, stage.valueFormat)}`;
         svg.appendChild(label);
       }
     });
@@ -324,9 +369,8 @@ export class Visual implements IVisual {
       button.setAttribute("aria-posinset", String(index + 1));
       button.setAttribute("aria-setsize", String(this.model.stages.length));
       button.setAttribute("aria-label", this.stageAriaLabel(stage));
-      const groupLabel = stage.group ? `; ${this.localizer.text("group")}: ${stage.group}` : "";
       const targetLabel = stage.target === null ? "" : `; ${this.localizer.text("target")}: ${this.localizer.number(stage.target, undefined, stage.targetFormat)}`;
-      button.textContent = `${this.localizer.text("stage")}: ${stage.label}; ${this.localizer.text("value")}: ${this.localizer.number(stage.value, undefined, stage.valueFormat)}${groupLabel}; ${this.localizer.text("stageConversion")}: ${this.localizer.percent(stage.stageConversion)}; ${this.localizer.text("dropRate")}: ${this.localizer.percent(stage.dropRate)}; ${this.localizer.text("absoluteLoss")}: ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${targetLabel}`;
+      button.textContent = `${this.localizer.text("stage")}: ${this.stageLabel(stage, index)}; ${this.localizer.text("value")}: ${this.localizer.number(stage.value, undefined, stage.valueFormat)}; ${this.localizer.text("stageConversion")}: ${this.localizer.percent(stage.stageConversion)}; ${this.localizer.text("dropRate")}: ${this.localizer.percent(stage.dropRate)}; ${this.localizer.text("absoluteLoss")}: ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${targetLabel}`;
       button.addEventListener("click", (event) => this.selectStage(stage, event));
       button.addEventListener("keydown", (event) => this.navigateStage(index, event));
       this.bindStagePointerInteractions(button, stage);
@@ -363,10 +407,13 @@ export class Visual implements IVisual {
     thead.appendChild(headerRow);
     table.appendChild(thead);
     const body = document.createElement("tbody");
-    this.model.stages.forEach((stage) => {
+    this.model.stages.forEach((stage, index) => {
       const row = document.createElement("tr");
+      row.setAttribute("aria-posinset", String(index + 1));
+      row.setAttribute("aria-setsize", String(this.model.stages.length));
+      row.setAttribute("aria-label", this.stageAriaLabel(stage));
       [
-        stage.label,
+        this.stageLabel(stage, index),
         this.localizer.number(stage.value, undefined, stage.valueFormat),
         this.localizer.percent(stage.overallConversion),
         this.localizer.percent(stage.stageConversion),
@@ -426,7 +473,8 @@ export class Visual implements IVisual {
       }
       if (this.groupCategory && stage.categoryIndex >= 0) {
         builder.withCategory(this.groupCategory, stage.categoryIndex);
-      } else if (this.valueColumns && stage.seriesIndex !== null && groupedValues[stage.seriesIndex]) {
+      }
+      if (this.valueColumns && stage.seriesIndex !== null && groupedValues[stage.seriesIndex]) {
         builder.withSeries(this.valueColumns, groupedValues[stage.seriesIndex]);
       }
       this.selections.set(stage.key, {
@@ -437,12 +485,18 @@ export class Visual implements IVisual {
   }
 
   private showContextMenu(stage: FunnelStage | undefined, x: number, y: number): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     const selectionId = stage ? this.selections.get(stage.key)?.id : undefined;
-    this.selectionManager.showContextMenu(selectionId ?? ({} as ISelectionId), { x, y });
+    this.selectionManager.showContextMenu(
+      selectionId ?? ({} as ISelectionId),
+      { x: this.safeCoordinate(x), y: this.safeCoordinate(y) }
+    );
   }
 
   private showTooltip(stage: FunnelStage, x: number, y: number, isTouchEvent: boolean): void {
-    if (!this.tooltipService || !this.tooltipsEnabled()) {
+    if (!this.tooltipService || !this.interactionsEnabled || !this.tooltipsEnabled()) {
       return;
     }
     const dataItems: powerbi.extensibility.VisualTooltipDataItem[] = [
@@ -465,7 +519,9 @@ export class Visual implements IVisual {
         value:
           typeof tooltip.value === "number"
             ? this.localizer.number(tooltip.value, undefined, tooltip.format)
-            : String(tooltip.value ?? "")
+            : tooltip.value === null || tooltip.value === undefined
+              ? this.localizer.text("notAvailable")
+              : String(tooltip.value)
       })
     );
     const selectionId = this.selections.get(stage.key)?.id;
@@ -480,7 +536,7 @@ export class Visual implements IVisual {
   }
 
   private moveTooltip(stage: FunnelStage, x: number, y: number, isTouchEvent: boolean): void {
-    if (!this.tooltipService || !this.tooltipsEnabled()) {
+    if (!this.tooltipService || !this.interactionsEnabled || !this.tooltipsEnabled()) {
       return;
     }
     if (this.tooltipStageKey !== stage.key) {
@@ -508,7 +564,8 @@ export class Visual implements IVisual {
   }
 
   private tooltipsEnabled(): boolean {
-    return typeof this.tooltipService?.enabled !== "function" || this.tooltipService.enabled();
+    return this.interactionsEnabled &&
+      (typeof this.tooltipService?.enabled !== "function" || this.tooltipService.enabled());
   }
 
   private bindStagePointerInteractions(element: Element, stage: FunnelStage): void {
@@ -525,6 +582,9 @@ export class Visual implements IVisual {
     };
 
     element.addEventListener("contextmenu", (event) => {
+      if (!this.interactionsEnabled) {
+        return;
+      }
       const pointerEvent = event as MouseEvent;
       pointerEvent.preventDefault();
       pointerEvent.stopPropagation();
@@ -534,6 +594,17 @@ export class Visual implements IVisual {
       const pointerEvent = event as PointerEvent;
       if (pointerEvent.pointerType !== "touch") {
         this.showTooltip(stage, pointerEvent.clientX, pointerEvent.clientY, false);
+      }
+    });
+    element.addEventListener("focus", () => {
+      if (this.interactionsEnabled) {
+        const bounds = element.getBoundingClientRect();
+        this.showTooltip(stage, bounds.left, bounds.top, false);
+      }
+    });
+    element.addEventListener("blur", () => {
+      if (!this.tooltipIsTouch) {
+        this.hideTooltip();
       }
     });
     element.addEventListener("pointermove", (event) => {
@@ -558,6 +629,9 @@ export class Visual implements IVisual {
     element.addEventListener("pointerdown", (event) => {
       const pointerEvent = event as PointerEvent;
       if (pointerEvent.pointerType === "touch") {
+        if (!this.interactionsEnabled) {
+          return;
+        }
         clearLongPress();
         touchStartX = pointerEvent.clientX;
         touchStartY = pointerEvent.clientY;
@@ -581,6 +655,9 @@ export class Visual implements IVisual {
   }
 
   private clearSelection(): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     this.selectionManager.clear();
   }
 
@@ -603,6 +680,25 @@ export class Visual implements IVisual {
     }
   }
 
+  private safeCoordinate(value: number): number {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  private stageLabel(stage: FunnelStage, index = this.model.stages.indexOf(stage)): string {
+    const sameLabel = this.model.stages.filter(
+      (candidate) => candidate.group === stage.group && candidate.label === stage.label
+    );
+    const occurrence = sameLabel.length > 1
+      ? this.model.stages
+        .slice(0, Math.max(0, index) + 1)
+        .filter((candidate) => candidate.group === stage.group && candidate.label === stage.label)
+        .length
+      : 0;
+    const duplicateSuffix = occurrence > 0 ? ` (${occurrence})` : "";
+    const groupPrefix = stage.group ? `${stage.group} · ` : "";
+    return `${groupPrefix}${stage.label}${duplicateSuffix}`;
+  }
+
   private stageAriaLabel(stage: FunnelStage): string {
     const group = stage.group ? `, ${this.localizer.text("group")} ${stage.group}` : "";
     const target = stage.target === null ? "" : `, ${this.localizer.text("target")} ${this.localizer.number(stage.target, undefined, stage.targetFormat)}`;
@@ -611,24 +707,56 @@ export class Visual implements IVisual {
         ? `, ${this.localizer.text("negativeValue")}`
         : stage.valueState === "blank"
           ? `, ${this.localizer.text("blankValue")}`
+          : stage.valueState === "invalid"
+            ? `, ${this.localizer.text("invalidValue")}`
           : "";
     return `${this.localizer.text("stage")} ${stage.label}, ${this.localizer.text("value")} ${this.localizer.number(stage.value, undefined, stage.valueFormat)}${group}${state}, ${this.localizer.text("overallConversion")} ${this.localizer.percent(stage.overallConversion)}, ${this.localizer.text("stageConversion")} ${this.localizer.percent(stage.stageConversion)}, ${this.localizer.text("dropRate")} ${this.localizer.percent(stage.dropRate)}, ${this.localizer.text("absoluteLoss")} ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${target}`;
+  }
+
+  private captureFocus(): void {
+    const active = document.activeElement;
+    if (!(active instanceof Element) || !this.root.contains(active)) {
+      return;
+    }
+    this.focusedStageKey =
+      active.getAttribute("data-stage-key") ??
+      active.closest("[data-stage-key]")?.getAttribute("data-stage-key") ??
+      undefined;
+    this.focusedTable = active.classList.contains("atlyn-accessible-table");
+  }
+
+  private restoreFocus(): void {
+    if (!this.focusedStageKey) {
+      if (this.focusedTable) {
+        this.root.querySelector<HTMLTableElement>(".atlyn-accessible-table")?.focus();
+      }
+      this.focusedTable = false;
+      return;
+    }
+    const stageKey = this.focusedStageKey;
+    this.focusedStageKey = undefined;
+    this.focusedTable = false;
+    this.stageButtons.find((button) => button.dataset.stageKey === stageKey)?.focus();
   }
 
   private clearChildren(): void {
     this.hideTooltip();
     this.clearLongPressTimers();
     this.selections.clear();
+    this.stageButtons.splice(0);
     while (this.root.firstChild) {
       this.root.removeChild(this.root.firstChild);
     }
   }
 
-  private renderEmpty(message: string): void {
+  private renderEmpty(message: string, state: "empty" | "error" = "empty"): void {
     this.clearChildren();
+    this.root.setAttribute("aria-busy", "false");
+    this.root.setAttribute("data-state", state);
     const empty = document.createElement("p");
     empty.className = "atlyn-empty";
     empty.setAttribute("role", "status");
+    empty.setAttribute("aria-live", "polite");
     empty.textContent = message;
     this.root.appendChild(empty);
   }

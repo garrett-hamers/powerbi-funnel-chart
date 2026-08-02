@@ -1,13 +1,13 @@
-import { buildFunnelModel, DataViewLike } from "../src/model";
+import { buildFunnelModel, CellValue, DataViewLike } from "../src/model";
 
 const dataView = (
   stages: Array<string | null>,
-  values: Array<number | null>,
+  values: CellValue[],
   options: {
-    order?: Array<number | null>;
-    targets?: Array<number | null>;
-    groups?: Array<string>;
-    highlights?: Array<number | null>;
+    order?: CellValue[];
+    targets?: CellValue[];
+    groups?: CellValue[];
+    highlights?: CellValue[];
     segmented?: boolean;
   } = {}
 ): DataViewLike => ({
@@ -76,6 +76,20 @@ describe("Atlyn Funnel conversion model", () => {
     ]));
   });
 
+  test("treats zero and negative StageOrder as valid and invalid order values as model-order fallbacks", () => {
+    const model = buildFunnelModel(dataView(
+      ["Zero", "Negative", "Invalid"],
+      [30, 20, 10],
+      { order: [0, -1, "not-a-number"] }
+    ));
+    expect(model.stages.map((stage) => stage.label)).toEqual(["Negative", "Zero", "Invalid"]);
+    expect(model.stages.map((stage) => stage.stageOrder)).toEqual([-1, 0, null]);
+    expect(model.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-order", stage: "Invalid" })
+    ]));
+    expect(model.warnings.some((warning) => warning.code === "missing-order")).toBe(false);
+  });
+
   test("preserves duplicate stage labels and diagnoses them", () => {
     const model = buildFunnelModel(dataView(["Lead", "Lead"], [20, 10]));
     expect(model.stages.map((stage) => stage.label)).toEqual(["Lead", "Lead"]);
@@ -107,6 +121,24 @@ describe("Atlyn Funnel conversion model", () => {
     expect(model.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "nonmonotonic", stage: "Increase" }),
       expect.objectContaining({ code: "negative-value", stage: "Negative" })
+    ]));
+  });
+
+  test("distinguishes invalid numeric values from blanks and preserves negative targets", () => {
+    const model = buildFunnelModel(dataView(
+      ["Valid", "Invalid", "Blank"],
+      [10, "not-a-number", null],
+      { targets: [-5, "bad", 0] }
+    ));
+    expect(model.stages[0].valueState).toBe("value");
+    expect(model.stages[1].valueState).toBe("invalid");
+    expect(model.stages[2].valueState).toBe("blank");
+    expect(model.stages[0].target).toBe(-5);
+    expect(model.stages[1].target).toBeNull();
+    expect(model.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-value", stage: "Invalid" }),
+      expect.objectContaining({ code: "invalid-target", stage: "Invalid" }),
+      expect.objectContaining({ code: "blank-value", stage: "Blank" })
     ]));
   });
 
@@ -143,6 +175,16 @@ describe("Atlyn Funnel conversion model", () => {
     expect(model.stages.filter((stage) => stage.label === "Lead")).toHaveLength(2);
   });
 
+  test("keeps a blank group distinct from a named group", () => {
+    const model = buildFunnelModel(dataView(
+      ["Lead", "Lead"],
+      [100, 80],
+      { groups: [null, "North"] }
+    ));
+    expect(model.stages.map((stage) => stage.group)).toEqual(["(Blank)", "North"]);
+    expect(new Set(model.stages.map((stage) => stage.key)).size).toBe(2);
+  });
+
   test("preserves measure format metadata for values and targets", () => {
     const view = dataView(["Lead", "Won"], [1234.5, 250], { targets: [1500, 300] });
     const columns = view.categorical?.values;
@@ -151,15 +193,38 @@ describe("Atlyn Funnel conversion model", () => {
     if (!valueColumn?.source || !targetColumn?.source) {
       throw new Error("test data must include value and target columns");
     }
-    valueColumn.source.format = "$#,0.00";
-    targetColumn.source.format = "$#,0";
+    valueColumn.source.objects = { general: { formatString: "$#,0.00" } };
+    targetColumn.source.objects = { general: { formatString: "$#,0" } };
     const model = buildFunnelModel(view);
     expect(model.stages[0]).toMatchObject({ valueFormat: "$#,0.00", targetFormat: "$#,0" });
+  });
+
+  test("keeps categorical tooltip fields in each stage's tooltip payload", () => {
+    const view = dataView(["Lead", "Won"], [100, 25]);
+    view.categorical?.categories?.push({
+      source: { roles: { Tooltips: true }, displayName: "Owner" },
+      values: ["Ada", "Lin"]
+    });
+    const model = buildFunnelModel(view);
+    expect(model.stages[0].tooltipValues).toEqual([
+      { label: "Owner", value: "Ada", format: undefined }
+    ]);
   });
 
   test("surfaces segmented host data as an incomplete contract", () => {
     const model = buildFunnelModel(dataView(["Start", "Finish"], [100, 25], { segmented: true }));
     expect(model.completeness).toBe("partial-segment");
+    expect(model.truncated).toBe(false);
+    expect(model.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "partial-data" })
+    ]));
+  });
+
+  test("surfaces host data reduction even when the visible window is not locally truncated", () => {
+    const view = dataView(["Start", "Finish"], [100, 25]);
+    view.metadata = { dataReduction: { categorical: { categories: { window: { count: 50 } } } } };
+    const model = buildFunnelModel(view);
+    expect(model.completeness).toBe("ordered-window");
     expect(model.truncated).toBe(false);
     expect(model.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "partial-data" })
@@ -174,6 +239,23 @@ describe("Atlyn Funnel conversion model", () => {
     expect(model.truncated).toBe(true);
     expect(model.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "stage-limit" })
+    ]));
+  });
+
+  test("bounds total grouped rows without silently claiming completeness", () => {
+    const model = buildFunnelModel(
+      dataView(
+        ["Lead", "Won", "Lead", "Won", "Lead", "Won"],
+        [100, 25, 90, 30, 80, 40],
+        { groups: ["North", "North", "South", "South", "West", "West"] }
+      ),
+      { maxVisibleStages: 3 }
+    );
+    expect(model.stages).toHaveLength(3);
+    expect(model.completeness).toBe("ordered-window");
+    expect(model.reducedCount).toBe(3);
+    expect(model.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "stage-limit", message: expect.stringContaining("render limit is 3") })
     ]));
   });
 

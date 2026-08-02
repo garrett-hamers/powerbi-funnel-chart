@@ -1,3 +1,4 @@
+import powerbi from "powerbi-visuals-api";
 import { Visual } from "../src/visual";
 import { DataViewLike, ValueColumnsLike } from "../src/model";
 
@@ -26,6 +27,7 @@ const makeHost = (): {
   tooltipShown: jest.Mock;
   tooltipMoved: jest.Mock;
   tooltipHidden: jest.Mock;
+  cleared: jest.Mock;
   selectionBuilders: Array<{ withCategory: jest.Mock; withSeries: jest.Mock }>;
 } => {
   const selected = jest.fn();
@@ -36,6 +38,7 @@ const makeHost = (): {
   const tooltipShown = jest.fn();
   const tooltipMoved = jest.fn();
   const tooltipHidden = jest.fn();
+  const cleared = jest.fn();
   const selectionBuilders: Array<{ withCategory: jest.Mock; withSeries: jest.Mock }> = [];
   const host = {
     locale: "en-US",
@@ -46,7 +49,7 @@ const makeHost = (): {
     },
     createSelectionManager: () => ({
       select: selected,
-      clear: jest.fn(),
+      clear: cleared,
       showContextMenu: contextMenu
     }),
     createSelectionIdBuilder: () => {
@@ -82,6 +85,7 @@ const makeHost = (): {
     tooltipShown,
     tooltipMoved,
     tooltipHidden,
+    cleared,
     selectionBuilders
   };
 };
@@ -100,6 +104,11 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     expect(element.textContent).toContain("Overall conversion");
     expect(element.textContent).toContain("Absolute loss");
     expect(element.querySelector(".atlyn-stage-button.atlyn-dimmed")).not.toBeNull();
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    expect(mocks.started).toHaveBeenCalledTimes(2);
+    expect(mocks.finished).toHaveBeenCalledTimes(2);
+    expect(mocks.failed).not.toHaveBeenCalled();
+    visual.destroy();
   });
 
   test("reads persisted formatting metadata, exposes a real formatting model, and renders it", () => {
@@ -162,7 +171,7 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
         ...input.categorical,
         values: input.categorical?.values?.map((column, index) =>
           index === 0
-            ? { ...column, source: { ...column.source, format: "$#,0.00" } }
+            ? { ...column, source: { ...column.source, objects: { general: { formatString: "$#,0.00" } } } }
             : column
         )
       }
@@ -170,6 +179,41 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     const visual = new Visual({ element, host: mocks.host } as never);
     visual.update({ dataViews: [formattedInput], viewport: { width: 640, height: 480 } } as never);
     expect(element.textContent).toContain("$100.00");
+    visual.destroy();
+  });
+
+  test("labels segmented updates as partial instead of claiming complete conversion", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({
+      dataViews: [input],
+      operationKind: powerbi.VisualDataChangeOperationKind.Segment,
+      viewport: { width: 640, height: 480 }
+    } as never);
+    expect(element.textContent).toContain("Partial data");
+    expect(mocks.finished).toHaveBeenCalledTimes(1);
+    visual.destroy();
+  });
+
+  test("rejects unsafe persisted colors without changing the rendered CSS contract", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({
+      dataViews: [{
+        ...input,
+        metadata: {
+          objects: {
+            dataPoint: { fill: { solid: { color: "red; background:url(https://example.invalid)" } } }
+          }
+        }
+      }],
+      viewport: { width: 640, height: 480 }
+    } as never);
+    expect((element.querySelector(".atlyn-funnel") as HTMLElement | null)?.style.getPropertyValue("--atlyn-primary")).toBe("#2563eb");
     visual.destroy();
   });
 
@@ -182,6 +226,25 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
     element.querySelector<HTMLButtonElement>(".atlyn-stage-button")?.click();
     expect(mocks.selected).not.toHaveBeenCalled();
+    element.querySelector("svg")?.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      clientX: 10,
+      clientY: 20
+    }));
+    element.querySelector("rect")?.dispatchEvent(new Event("pointerenter", { bubbles: true }));
+    expect(mocks.contextMenu).not.toHaveBeenCalled();
+    expect(mocks.tooltipShown).not.toHaveBeenCalled();
+    visual.destroy();
+  });
+
+  test("clears host selection from empty chart space", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    element.querySelector("svg")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(mocks.cleared).toHaveBeenCalledTimes(1);
     visual.destroy();
   });
 
@@ -281,6 +344,38 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     expect(mocks.selectionBuilders).toHaveLength(4);
     expect(mocks.selectionBuilders.every((builder) => builder.withSeries.mock.calls.length === 1)).toBe(true);
     expect(new Set(Array.from(element.querySelectorAll<SVGRectElement>("rect")).map((bar) => bar.dataset.stageKey)).size).toBe(4);
+    visual.destroy();
+  });
+
+  test("combines category and series identity when grouped data also has a group category", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const values: ValueColumnsLike = [{
+      source: { roles: { Value: true }, displayName: "Value" },
+      values: [100, 25]
+    }];
+    values.grouped = () => [{
+      name: "North",
+      identity: { key: "north" },
+      values: [{ source: { roles: { Value: true }, displayName: "Value" }, values: [100, 25] }]
+    }];
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({
+      dataViews: [{
+        categorical: {
+          categories: [
+            { source: { roles: { Stage: true }, displayName: "Stage" }, values: ["Lead", "Won"] },
+            { source: { roles: { Group: true }, displayName: "Group" }, values: ["North", "North"] }
+          ],
+          values
+        }
+      }],
+      viewport: { width: 640, height: 480 }
+    } as never);
+    expect(mocks.selectionBuilders).toHaveLength(2);
+    expect(mocks.selectionBuilders.every((builder) => builder.withSeries.mock.calls.length === 1)).toBe(true);
+    expect(mocks.selectionBuilders.every((builder) => builder.withCategory.mock.calls.length === 2)).toBe(true);
     visual.destroy();
   });
 
@@ -402,6 +497,20 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     buttons[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     visual.destroy();
     expect(element.childElementCount).toBe(0);
+  });
+
+  test("restores stage focus after a host update", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    const initialButton = element.querySelector<HTMLButtonElement>(".atlyn-stage-button");
+    const stageKey = initialButton?.dataset.stageKey;
+    initialButton?.focus();
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    expect((document.activeElement as HTMLElement | null)?.dataset.stageKey).toBe(stageKey);
+    visual.destroy();
   });
 
   test("renders high contrast and compact mobile states without errors", () => {
