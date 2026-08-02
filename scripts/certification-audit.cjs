@@ -14,10 +14,30 @@ const requireCondition = (condition, message) => {
 const capabilities = readJson("capabilities.json");
 const packageJson = readJson("package.json");
 const pbiviz = readJson("pbiviz.json");
+const manifest = readJson("release-manifest.json");
 const source = fs.readFileSync(path.join(root, "src", "visual.ts"), "utf8");
 const artifacts = fs.existsSync(path.join(root, "dist"))
   ? fs.readdirSync(path.join(root, "dist")).filter((entry) => entry.endsWith(".pbiviz"))
   : [];
+const expectedArtifact = `${pbiviz.visual?.guid}.${pbiviz.visual?.version}.pbiviz`;
+const sourceParityPaths = [
+  "capabilities.json",
+  "dependencies.json",
+  "package.json",
+  "package-lock.json",
+  "pbiviz.json",
+  "src",
+  "scripts/package.cjs",
+  "scripts/package-utils.cjs"
+];
+let currentCommit;
+try {
+  currentCommit = require("node:child_process")
+    .execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" })
+    .trim();
+} catch (error) {
+  failures.push(`unable to determine the current source commit: ${error.message}`);
+}
 
 requireCondition(Array.isArray(capabilities.privileges) && capabilities.privileges.length === 0, "capabilities.privileges must be []");
 requireCondition(pbiviz.visual?.guid === "atlynFunnelA1B2C3D4", "pbiviz.json must preserve the stable visual GUID");
@@ -37,7 +57,30 @@ requireCondition(!/"top"|sortBy|orderBy/i.test(JSON.stringify(capabilities)), "v
 requireCondition(!/\b(fetch|XMLHttpRequest|WebSocket|eval)\b/.test(source), "visual source must not access network or eval");
 requireCondition(!/\b(innerHTML|outerHTML|insertAdjacentHTML)\b/.test(source), "visual source must use safe DOM APIs");
 requireCondition(!/enumerateObjectInstances/.test(source), "deprecated enumerateObjectInstances must not be implemented");
-requireCondition(artifacts.some((entry) => entry.startsWith("atlynFunnelA1B2C3D4.")), "packaging must emit a stable-GUID PBIVIZ artifact");
+requireCondition(artifacts.length === 1 && artifacts[0] === expectedArtifact, `packaging must emit only ${expectedArtifact}`);
+requireCondition(manifest.visual?.guid === pbiviz.visual?.guid, "release manifest GUID must match pbiviz.json");
+requireCondition(manifest.visual?.version === pbiviz.visual?.version, "release manifest version must match pbiviz.json");
+requireCondition(manifest.package?.filename === expectedArtifact, "release manifest filename must match the package output");
+requireCondition(typeof manifest.package?.sha256 === "string" && /^[a-f0-9]{64}$/.test(manifest.package.sha256), "release manifest must contain a SHA-256 package hash");
+requireCondition(manifest.package?.bytes > 0, "release manifest must contain the package byte size");
+requireCondition(manifest.sourceCommit === currentCommit || typeof manifest.sourceCommit === "string", "release manifest must record a source commit");
+if (manifest.sourceCommit && currentCommit && manifest.sourceCommit !== currentCommit) {
+  try {
+    require("node:child_process").execFileSync(
+      "git",
+      ["diff", "--quiet", `${manifest.sourceCommit}..${currentCommit}`, "--", ...sourceParityPaths],
+      { cwd: root, stdio: "ignore" }
+    );
+  } catch {
+    failures.push("release manifest source commit does not match the current source files");
+  }
+}
+if (artifacts.length === 1 && manifest.package?.filename === artifacts[0]) {
+  const artifactPath = path.join(root, "dist", artifacts[0]);
+  const hash = require("node:crypto").createHash("sha256").update(fs.readFileSync(artifactPath)).digest("hex");
+  requireCondition(hash === manifest.package.sha256, "release manifest SHA-256 does not match the package");
+  requireCondition(fs.statSync(artifactPath).size === manifest.package.bytes, "release manifest byte size does not match the package");
+}
 
 if (failures.length > 0) {
   process.stderr.write(`Certification audit failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}\n`);

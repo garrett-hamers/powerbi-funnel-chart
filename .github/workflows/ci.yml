@@ -35,6 +35,8 @@ jobs:
         run: npm run build
       - name: Package
         run: npm run package
+      - name: Release manifest
+        run: npm run release-manifest
       - name: Certification audit
         run: npm run certification-audit
       - name: Dependency audit
