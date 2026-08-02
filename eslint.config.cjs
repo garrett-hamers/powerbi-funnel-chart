@@ -1,7 +1,12 @@
 const tseslint = require("@typescript-eslint/eslint-plugin");
 const parser = require("@typescript-eslint/parser");
+const powerbiVisuals = require("eslint-plugin-powerbi-visuals");
 
 module.exports = [
+  powerbiVisuals.configs.recommended,
+  {
+    ignores: ["node_modules/**", "dist/**", ".tmp/**", "coverage/**"]
+  },
   {
     files: ["src/**/*.ts", "tests/**/*.ts"],
     languageOptions: {

@@ -1,0 +1,22 @@
+{
+  "Role_Stage_DisplayNameKey": "Étape",
+  "Role_Stage_DescriptionKey": "Étape ordonnée du processus",
+  "Role_Value_DisplayNameKey": "Valeur",
+  "Role_Value_DescriptionKey": "Volume ou montant de l’étape",
+  "Role_StageOrder_DisplayNameKey": "Ordre des étapes",
+  "Role_StageOrder_DescriptionKey": "Ordre numérique facultatif ; les égalités sont diagnostiquées",
+  "Role_Target_DisplayNameKey": "Cible",
+  "Role_Target_DescriptionKey": "Référence facultative pour chaque étape",
+  "Role_Group_DisplayNameKey": "Groupe",
+  "Role_Group_DescriptionKey": "Segment facultatif",
+  "Role_Tooltips_DisplayNameKey": "Info-bulles",
+  "Role_Tooltips_DescriptionKey": "Champs de détail facultatifs (cinq maximum)",
+  "FormatCard_DisplayNameKey": "Entonnoir",
+  "FormatCard_DescriptionKey": "Configurez l’apparence de l’entonnoir.",
+  "Object_DataPoint_DisplayNameKey": "Points de données",
+  "Property_DataPointFill_DisplayNameKey": "Remplissage",
+  "Property_DataPointFill_DescriptionKey": "Couleur des points de données positifs.",
+  "Object_Labels_DisplayNameKey": "Étiquettes",
+  "Property_LabelsShow_DisplayNameKey": "Afficher les étiquettes du graphique",
+  "Property_LabelsShow_DescriptionKey": "Afficher les étiquettes et les valeurs des étapes sur le graphique."
+}

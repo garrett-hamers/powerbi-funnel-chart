@@ -18,6 +18,8 @@
   min-width: 160px;
   overflow: auto;
   padding: 10px;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .atlyn-funnel[data-high-contrast="true"] {
@@ -64,10 +66,19 @@
 
 .atlyn-chart {
   display: block;
-  height: 220px;
+  height: auto;
   max-width: 100%;
+  min-height: 220px;
   overflow: visible;
   width: 100%;
+}
+
+.atlyn-chart-scroll {
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .atlyn-bar {
@@ -83,7 +94,23 @@
 }
 
 .atlyn-bar.atlyn-negative {
-  fill: #b45309;
+  fill: none;
+  stroke-dasharray: 3 2;
+  stroke-width: 2;
+}
+
+.atlyn-state-marker {
+  fill: none;
+  stroke: var(--atlyn-text);
+  stroke-width: 2;
+}
+
+.atlyn-state-marker.atlyn-blank {
+  stroke-dasharray: 4 3;
+}
+
+.atlyn-state-marker.atlyn-negative {
+  stroke-dasharray: 3 2;
 }
 
 .atlyn-dimmed {
@@ -115,6 +142,7 @@
   min-height: 36px;
   padding: 7px 9px;
   text-align: start;
+  touch-action: manipulation;
   width: 100%;
 }
 
@@ -151,7 +179,7 @@
 }
 
 .atlyn-funnel[data-compact="true"] .atlyn-chart {
-  height: 150px;
+  min-height: 150px;
 }
 
 .atlyn-funnel[data-compact="true"] .atlyn-stage-button {

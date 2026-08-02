@@ -1,0 +1,22 @@
+{
+  "Role_Stage_DisplayNameKey": "Etapa",
+  "Role_Stage_DescriptionKey": "Etapa del proceso ordenada",
+  "Role_Value_DisplayNameKey": "Valor",
+  "Role_Value_DescriptionKey": "Volumen o importe de la etapa",
+  "Role_StageOrder_DisplayNameKey": "Orden de etapa",
+  "Role_StageOrder_DescriptionKey": "Orden numérico opcional; se diagnostican empates",
+  "Role_Target_DisplayNameKey": "Objetivo",
+  "Role_Target_DescriptionKey": "Referencia opcional para cada etapa",
+  "Role_Group_DisplayNameKey": "Grupo",
+  "Role_Group_DescriptionKey": "Segmento opcional",
+  "Role_Tooltips_DisplayNameKey": "Información sobre herramientas",
+  "Role_Tooltips_DescriptionKey": "Campos de detalle opcionales (hasta cinco)",
+  "FormatCard_DisplayNameKey": "Embudo",
+  "FormatCard_DescriptionKey": "Configure la apariencia del embudo.",
+  "Object_DataPoint_DisplayNameKey": "Puntos de datos",
+  "Property_DataPointFill_DisplayNameKey": "Relleno",
+  "Property_DataPointFill_DescriptionKey": "Color de los puntos de datos positivos.",
+  "Object_Labels_DisplayNameKey": "Etiquetas",
+  "Property_LabelsShow_DisplayNameKey": "Mostrar etiquetas del gráfico",
+  "Property_LabelsShow_DescriptionKey": "Mostrar etiquetas y valores de etapa en el gráfico."
+}

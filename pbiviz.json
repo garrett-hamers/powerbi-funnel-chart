@@ -20,6 +20,5 @@
   "externalJS": [],
   "style": "src/style.css",
   "capabilities": "capabilities.json",
-  "dependencies": "dependencies.json",
-  "stringResources": []
+  "dependencies": "dependencies.json"
 }

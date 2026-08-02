@@ -4,6 +4,22 @@ export interface SourceLike {
   displayName?: string;
   queryName?: string;
   roles?: Record<string, boolean>;
+  format?: string;
+}
+
+export type ObjectValueLike =
+  | CellValue
+  | {
+      solid?: {
+        color?: string;
+      };
+    }
+  | Record<string, unknown>;
+
+export interface MetadataLike {
+  columns?: SourceLike[];
+  objects?: Record<string, Record<string, ObjectValueLike>>;
+  segment?: unknown;
 }
 
 export interface CategoryColumnLike {
@@ -34,6 +50,7 @@ export interface CategoricalDataViewLike {
 }
 
 export interface DataViewLike {
+  metadata?: MetadataLike;
   categorical?: CategoricalDataViewLike;
 }
 
@@ -51,10 +68,11 @@ export interface FunnelWarning {
     | "blank-value"
     | "negative-value"
     | "zero-baseline"
-    | "stage-limit";
-  group?: string;
-  stage?: string;
-  message: string;
+    | "stage-limit"
+    | "partial-data";
+    group?: string;
+    stage?: string;
+    message: string;
 }
 
 export interface FunnelStage {
@@ -66,9 +84,14 @@ export interface FunnelStage {
   stageOrder: number | null;
   valueState: ValueState;
   modelIndex: number;
+  categoryIndex: number;
+  seriesIndex: number | null;
   identity?: unknown;
+  groupIdentity?: unknown;
   highlighted: boolean;
-  tooltipValues: Array<{ label: string; value: CellValue }>;
+  tooltipValues: Array<{ label: string; value: CellValue; format?: string }>;
+  valueFormat?: string;
+  targetFormat?: string;
   overallConversion: number | null;
   stageConversion: number | null;
   dropRate: number | null;
@@ -82,6 +105,8 @@ export interface FunnelModel {
   hasGroup: boolean;
   groups: string[];
   truncated: boolean;
+  reducedCount: number;
+  completeness: "complete" | "ordered-window" | "partial-segment";
 }
 
 export interface BuildModelOptions {
@@ -96,9 +121,14 @@ interface WorkingStage {
   target: number | null;
   stageOrder: number | null;
   modelIndex: number;
+  categoryIndex: number;
+  seriesIndex: number | null;
   identity?: unknown;
+  groupIdentity?: unknown;
   highlighted: boolean;
-  tooltipValues: Array<{ label: string; value: CellValue }>;
+  tooltipValues: Array<{ label: string; value: CellValue; format?: string }>;
+  valueFormat?: string;
+  targetFormat?: string;
 }
 
 const roleIs = (source: SourceLike | undefined, role: string): boolean =>
@@ -153,13 +183,14 @@ const getTooltips = (
   columns: ValueColumnLike[],
   index: number,
   excluded: Set<ValueColumnLike>
-): Array<{ label: string; value: CellValue }> =>
+): Array<{ label: string; value: CellValue; format?: string }> =>
   columns
     .filter((column) => roleIs(column.source, "Tooltips") && !excluded.has(column))
     .slice(0, 5)
     .map((column) => ({
       label: column.source?.displayName ?? column.source?.queryName ?? "Tooltip",
-      value: cellAt(column, index)
+      value: cellAt(column, index),
+      format: column.source?.format
     }));
 
 const sortStages = (rows: WorkingStage[], explicitOrder: boolean): WorkingStage[] => {
@@ -260,11 +291,11 @@ const calculateMetrics = (
   return rows.map((row, index) => {
     const previous = index > 0 ? rows[index - 1].value : null;
     const overallConversion =
-      baseline !== null && baseline !== 0 && row.value !== null ? row.value / baseline : null;
+      baseline !== null && baseline > 0 && row.value !== null && row.value >= 0 ? row.value / baseline : null;
     const stageConversion =
-      previous !== null && previous !== 0 && row.value !== null ? row.value / previous : null;
+      previous !== null && previous > 0 && row.value !== null && row.value >= 0 ? row.value / previous : null;
     return {
-      key: `${group ?? "default"}:${row.modelIndex}:${row.label}`,
+      key: JSON.stringify([group ?? "default", row.categoryIndex, row.seriesIndex, row.label]),
       label: row.label,
       group,
       value: row.value,
@@ -272,13 +303,24 @@ const calculateMetrics = (
       stageOrder: row.stageOrder,
       valueState: stateFor(row.value, row.value),
       modelIndex: row.modelIndex,
+      categoryIndex: row.categoryIndex,
+      seriesIndex: row.seriesIndex,
       identity: row.identity,
+      groupIdentity: row.groupIdentity,
       highlighted: row.highlighted,
       tooltipValues: row.tooltipValues,
+      valueFormat: row.valueFormat,
+      targetFormat: row.targetFormat,
       overallConversion,
       stageConversion,
       dropRate: stageConversion === null ? null : 1 - stageConversion,
-      absoluteLoss: previous !== null && row.value !== null ? previous - row.value : null
+      absoluteLoss:
+        previous !== null &&
+        previous >= 0 &&
+        row.value !== null &&
+        row.value >= 0
+          ? previous - row.value
+          : null
     };
   });
 };
@@ -288,7 +330,9 @@ const rowsFor = (
   groupCategory: CategoryColumnLike | undefined,
   columns: ValueColumnLike[],
   group: string | undefined,
-  blankLabel: string
+  blankLabel: string,
+  seriesIndex: number | null = null,
+  groupIdentity?: unknown
 ): WorkingStage[] => {
   const stages = stageCategory?.values ?? [];
   const valueColumn = firstValueColumn(columns, "Value");
@@ -305,16 +349,21 @@ const rowsFor = (
       target: asNumber(cellAt(targetColumn, index)),
       stageOrder: asNumber(cellAt(orderColumn, index)),
       modelIndex: index,
+      categoryIndex: index,
+      seriesIndex,
       identity: stageCategory?.identity?.[index],
+      groupIdentity: groupIdentity ?? groupCategory?.identity?.[index],
       highlighted: valueColumn?.highlights?.[index] === undefined || valueColumn.highlights[index] !== null,
-      tooltipValues: getTooltips(columns, index, excluded)
+      tooltipValues: getTooltips(columns, index, excluded),
+      valueFormat: valueColumn?.source?.format,
+      targetFormat: targetColumn?.source?.format
     };
   });
 };
 
 export const buildFunnelModel = (dataView: DataViewLike | undefined, options: BuildModelOptions = {}): FunnelModel => {
   const blankLabel = options.blankLabel ?? "(Blank)";
-  const maxStages = options.maxStages ?? 50;
+  const maxStages = Math.max(1, options.maxStages ?? 50);
   const categories = dataView?.categorical?.categories ?? [];
   const columns = dataView?.categorical?.values ?? [];
   const stageCategory = firstCategory(categories, "Stage");
@@ -322,6 +371,7 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
   const valueColumn = firstValueColumn(columns, "Value");
   const stageOrderColumn = firstValueColumn(columns, "StageOrder");
   const warnings: FunnelWarning[] = [];
+  const isSegmented = Boolean(dataView?.metadata && "segment" in dataView.metadata);
 
   if (!stageCategory) {
     warnings.push({
@@ -342,7 +392,9 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
       hasExplicitOrder: Boolean(stageOrderColumn),
       hasGroup: Boolean(groupCategory),
       groups: [],
-      truncated: false
+      truncated: false,
+      reducedCount: 0,
+      completeness: isSegmented ? "partial-segment" : "complete"
     };
   }
 
@@ -354,25 +406,50 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
       message: "StageOrder is not assigned; model order is displayed and is not alphabetically sorted."
     });
   }
+  if (isSegmented) {
+    warnings.push({
+      code: "partial-data",
+      message: "The host supplied a data segment; conversion metrics describe the supplied segment only."
+    });
+  }
 
   const stageGroups: FunnelStage[] = [];
   const seenGroups = new Set<string>();
-  if (grouped.length > 0) {
+  let truncated = false;
+  let reducedCount = 0;
+  const addGroupRows = (
+    rows: WorkingStage[],
+    group: string | undefined,
+    displayRows: WorkingStage[] = rows
+  ): void => {
+    const orderedRows = sortStages(displayRows, explicitOrder);
+    const visibleRows = orderedRows.slice(0, maxStages);
+    stageGroups.push(...calculateMetrics(visibleRows, warnings, group, explicitOrder));
+    if (orderedRows.length > maxStages) {
+      truncated = true;
+      reducedCount += orderedRows.length - maxStages;
+      warnings.push({
+        code: "stage-limit",
+        group,
+        message: `Only the first ${maxStages} ordered stages are shown; ${orderedRows.length - maxStages} stage(s) are outside the visual window.`
+      });
+    }
+  };
+
+  const hasSeriesGroups =
+    grouped.length > 0 &&
+    grouped.some((entry) => entry.name !== undefined || entry.identity !== undefined);
+  if (hasSeriesGroups) {
     grouped.forEach((entry, groupIndex) => {
       const group = groupName(entry.name) ?? `Group ${groupIndex + 1}`;
       seenGroups.add(group);
-      const rows = sortStages(rowsFor(stageCategory, groupCategory, entry.values ?? columns, group, blankLabel), explicitOrder);
-      stageGroups.push(...calculateMetrics(rows.slice(0, maxStages), warnings, group, explicitOrder));
-      if (rows.length > maxStages) {
-        warnings.push({
-          code: "stage-limit",
-          group,
-          message: `Only the first ${maxStages} model-ordered stages are shown.`
-        });
-      }
+      addGroupRows(
+        rowsFor(stageCategory, groupCategory, entry.values ?? columns, group, blankLabel, groupIndex, entry.identity),
+        group
+      );
     });
   } else {
-    const rows = sortStages(rowsFor(stageCategory, groupCategory, columns, undefined, blankLabel), explicitOrder);
+    const rows = rowsFor(stageCategory, groupCategory, columns, undefined, blankLabel);
     rows.forEach((row) => {
       if (row.group) {
         seenGroups.add(row.group);
@@ -383,15 +460,7 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
       : [rows];
     byGroup.forEach((groupRows, groupIndex) => {
       const group = groupCategory ? (groupRows[0]?.group ?? `Group ${groupIndex + 1}`) : undefined;
-      const orderedRows = sortStages(groupRows, explicitOrder);
-      stageGroups.push(...calculateMetrics(orderedRows.slice(0, maxStages), warnings, group, explicitOrder));
-      if (orderedRows.length > maxStages) {
-        warnings.push({
-          code: "stage-limit",
-          group,
-          message: `Only the first ${maxStages} model-ordered stages are shown.`
-        });
-      }
+      addGroupRows(groupRows, group);
     });
   }
 
@@ -399,8 +468,10 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
     stages: stageGroups,
     warnings,
     hasExplicitOrder: explicitOrder,
-    hasGroup: Boolean(groupCategory || grouped.length > 0),
+    hasGroup: Boolean(groupCategory || hasSeriesGroups),
     groups: [...seenGroups],
-    truncated: stageGroups.length < (stageCategory.values?.length ?? 0)
+    truncated,
+    reducedCount,
+    completeness: isSegmented ? "partial-segment" : truncated ? "ordered-window" : "complete"
   };
 };

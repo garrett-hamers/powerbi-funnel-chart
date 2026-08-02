@@ -8,8 +8,10 @@ const dataView = (
     targets?: Array<number | null>;
     groups?: Array<string>;
     highlights?: Array<number | null>;
+    segmented?: boolean;
   } = {}
 ): DataViewLike => ({
+  metadata: options.segmented ? { segment: {} } : undefined,
   categorical: {
     categories: [
       {
@@ -99,6 +101,9 @@ describe("Atlyn Funnel conversion model", () => {
     const model = buildFunnelModel(dataView(["Start", "Increase", "Negative"], [10, 15, -2]));
     expect(model.stages.map((stage) => stage.value)).toEqual([10, 15, -2]);
     expect(model.stages[2].valueState).toBe("negative");
+    expect(model.stages[2].overallConversion).toBeNull();
+    expect(model.stages[2].stageConversion).toBeNull();
+    expect(model.stages[2].absoluteLoss).toBeNull();
     expect(model.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "nonmonotonic", stage: "Increase" }),
       expect.objectContaining({ code: "negative-value", stage: "Negative" })
@@ -113,6 +118,52 @@ describe("Atlyn Funnel conversion model", () => {
     ));
     expect(model.stages.filter((stage) => stage.group === "North")[1].stageConversion).toBe(0.25);
     expect(model.stages.filter((stage) => stage.group === "South")[1].stageConversion).toBe(0.5);
+  });
+
+  test("does not invent a group for the host's synthetic ungrouped series", () => {
+    const view = dataView(["Lead", "Won"], [100, 25]);
+    const columns = view.categorical?.values;
+    if (!columns) {
+      throw new Error("test data must include value columns");
+    }
+    columns.grouped = () => [{ values: [...columns] }];
+    const model = buildFunnelModel(view);
+    expect(model.hasGroup).toBe(false);
+    expect(model.stages.every((stage) => stage.group === undefined)).toBe(true);
+    expect(model.stages.map((stage) => stage.label)).toEqual(["Lead", "Won"]);
+  });
+
+  test("uses composite model keys for duplicate stages across groups", () => {
+    const model = buildFunnelModel(dataView(
+      ["Lead", "Won", "Lead", "Won"],
+      [100, 25, 80, 40],
+      { groups: ["North", "North", "South", "South"] }
+    ));
+    expect(new Set(model.stages.map((stage) => stage.key)).size).toBe(model.stages.length);
+    expect(model.stages.filter((stage) => stage.label === "Lead")).toHaveLength(2);
+  });
+
+  test("preserves measure format metadata for values and targets", () => {
+    const view = dataView(["Lead", "Won"], [1234.5, 250], { targets: [1500, 300] });
+    const columns = view.categorical?.values;
+    const valueColumn = columns?.find((column) => column.source?.roles?.Value);
+    const targetColumn = columns?.find((column) => column.source?.roles?.Target);
+    if (!valueColumn?.source || !targetColumn?.source) {
+      throw new Error("test data must include value and target columns");
+    }
+    valueColumn.source.format = "$#,0.00";
+    targetColumn.source.format = "$#,0";
+    const model = buildFunnelModel(view);
+    expect(model.stages[0]).toMatchObject({ valueFormat: "$#,0.00", targetFormat: "$#,0" });
+  });
+
+  test("surfaces segmented host data as an incomplete contract", () => {
+    const model = buildFunnelModel(dataView(["Start", "Finish"], [100, 25], { segmented: true }));
+    expect(model.completeness).toBe("partial-segment");
+    expect(model.truncated).toBe(false);
+    expect(model.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "partial-data" })
+    ]));
   });
 
   test("uses a bounded ordered window and reports truncation", () => {
