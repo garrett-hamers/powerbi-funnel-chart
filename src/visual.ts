@@ -21,7 +21,7 @@ interface StageSelection {
 }
 
 interface ContextMenuManager {
-  showContextMenu?: (selectionId: ISelectionId | null, point: { x: number; y: number }) => void;
+  showContextMenu?: (selectionId: ISelectionId | Record<string, never>, point: { x: number; y: number }) => void;
 }
 
 interface EventService {
@@ -434,7 +434,9 @@ export class Visual implements IVisual {
   }
 
   private showContextMenu(stage: FunnelStage | undefined, x: number, y: number): void {
-    const selectionId = stage ? this.selections.get(stage.key)?.id ?? null : null;
+    const selectionId: ISelectionId | Record<string, never> = stage
+      ? this.selections.get(stage.key)?.id ?? {}
+      : {};
     (this.selectionManager as unknown as ContextMenuManager).showContextMenu?.(selectionId, { x, y });
   }
 

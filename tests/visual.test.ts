@@ -71,6 +71,21 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     expect(element.querySelector(".atlyn-stage-button.atlyn-dimmed")).not.toBeNull();
   });
 
+  test("uses an empty selection object for background context menus", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const mocks = makeHost();
+    const visual = new Visual({ element, host: mocks.host } as never);
+    visual.update({ dataViews: [input], viewport: { width: 640, height: 480 } } as never);
+    element.querySelector("svg")?.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      clientX: 10,
+      clientY: 20
+    }));
+    expect(mocks.contextMenu).toHaveBeenCalledWith({}, { x: 10, y: 20 });
+    visual.destroy();
+  });
+
   test("selects a stage, supports deterministic keyboard order, and destroys cleanly", () => {
     const element = document.createElement("div");
     document.body.appendChild(element);

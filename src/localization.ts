@@ -21,11 +21,17 @@ const translations: Record<string, Messages> = {
     tableLabel: "Accessible funnel metrics",
     stageListLabel: "Funnel stages",
     noData: "Add Stage and Value fields to view the funnel.",
+    missingStage: "Missing Stage field.",
+    missingValue: "Missing Value measure.",
     inferredOrder: "Inferred order: model order is preserved.",
     duplicateOrder: "Duplicate StageOrder: model order breaks ties.",
     duplicateStage: "Duplicate stage label preserved.",
+    missingOrder: "Missing StageOrder on one or more stages.",
     nonmonotonic: "Nonmonotonic values: a later stage increases.",
     blankValue: "Blank value",
+    negativeValue: "Negative value: the funnel is not a conventional conversion sequence.",
+    zeroBaseline: "Zero baseline: conversion ratios are unavailable.",
+    stageLimit: "Stage limit reached: only the ordered window is shown.",
     zero: "Zero",
     selected: "Selected",
     notAvailable: "Not available"
@@ -41,7 +47,18 @@ const translations: Record<string, Messages> = {
     warning: "Advertencia",
     tableLabel: "Métricas de embudo accesibles",
     stageListLabel: "Etapas del embudo",
-    noData: "Agregue campos Stage y Value para ver el embudo."
+    noData: "Agregue campos Stage y Value para ver el embudo.",
+    missingStage: "Falta el campo Stage.",
+    missingValue: "Falta la medida Value.",
+    inferredOrder: "Orden inferido: se conserva el orden del modelo.",
+    duplicateOrder: "StageOrder duplicado: el orden del modelo resuelve los empates.",
+    duplicateStage: "Etiqueta de etapa duplicada conservada.",
+    missingOrder: "Falta StageOrder en una o más etapas.",
+    nonmonotonic: "Valores no monótonos: una etapa posterior aumenta.",
+    blankValue: "Valor en blanco.",
+    negativeValue: "Valor negativo: no es una secuencia de conversión convencional.",
+    zeroBaseline: "Base cero: las proporciones de conversión no están disponibles.",
+    stageLimit: "Límite de etapas alcanzado: solo se muestra la ventana ordenada."
   },
   fr: {
     value: "Valeur",
@@ -54,7 +71,18 @@ const translations: Record<string, Messages> = {
     warning: "Avertissement",
     tableLabel: "Mesures de l'entonnoir accessibles",
     stageListLabel: "Étapes de l'entonnoir",
-    noData: "Ajoutez les champs Stage et Value pour afficher l'entonnoir."
+    noData: "Ajoutez les champs Stage et Value pour afficher l'entonnoir.",
+    missingStage: "Le champ Stage est manquant.",
+    missingValue: "La mesure Value est manquante.",
+    inferredOrder: "Ordre déduit : l'ordre du modèle est conservé.",
+    duplicateOrder: "StageOrder en double : l'ordre du modèle départage les égalités.",
+    duplicateStage: "Libellé d'étape en double conservé.",
+    missingOrder: "StageOrder manque pour une ou plusieurs étapes.",
+    nonmonotonic: "Valeurs non monotones : une étape ultérieure augmente.",
+    blankValue: "Valeur vide.",
+    negativeValue: "Valeur négative : la séquence n'est pas une conversion conventionnelle.",
+    zeroBaseline: "Base zéro : les ratios de conversion sont indisponibles.",
+    stageLimit: "Limite d'étapes atteinte : seule la fenêtre ordonnée est affichée."
   },
   de: {
     value: "Wert",
@@ -67,7 +95,18 @@ const translations: Record<string, Messages> = {
     warning: "Warnung",
     tableLabel: "Barrierefreie Trichtermetriken",
     stageListLabel: "Trichterstufen",
-    noData: "Fügen Sie Stage- und Value-Felder hinzu."
+    noData: "Fügen Sie Stage- und Value-Felder hinzu.",
+    missingStage: "Das Stage-Feld fehlt.",
+    missingValue: "Das Value-Maß fehlt.",
+    inferredOrder: "Abgeleitete Reihenfolge: Die Modellreihenfolge bleibt erhalten.",
+    duplicateOrder: "Doppeltes StageOrder: Die Modellreihenfolge löst Gleichstände.",
+    duplicateStage: "Doppelte Stufenbezeichnung beibehalten.",
+    missingOrder: "StageOrder fehlt für mindestens eine Stufe.",
+    nonmonotonic: "Nichtmonotone Werte: Eine spätere Stufe steigt.",
+    blankValue: "Leerer Wert.",
+    negativeValue: "Negativer Wert: kein konventioneller Konversionstrichter.",
+    zeroBaseline: "Nullbasis: Konversionsverhältnisse sind nicht verfügbar.",
+    stageLimit: "Stufenlimit erreicht: Nur das geordnete Fenster wird angezeigt."
   },
   ar: {
     value: "القيمة",
@@ -81,6 +120,17 @@ const translations: Record<string, Messages> = {
     tableLabel: "مقاييس مسار التحويل الميسّرة",
     stageListLabel: "مراحل مسار التحويل",
     noData: "أضف حقلي Stage وValue لعرض المسار.",
+    missingStage: "حقل Stage مفقود.",
+    missingValue: "مقياس Value مفقود.",
+    inferredOrder: "ترتيب مستنتج: تم الحفاظ على ترتيب النموذج.",
+    duplicateOrder: "StageOrder مكرر: ترتيب النموذج يحسم التعادل.",
+    duplicateStage: "تم الحفاظ على تسمية المرحلة المكررة.",
+    missingOrder: "StageOrder مفقود لمرحلة واحدة أو أكثر.",
+    nonmonotonic: "قيم غير رتيبة: مرحلة لاحقة تزداد.",
+    blankValue: "قيمة فارغة.",
+    negativeValue: "قيمة سالبة: هذا ليس مسار تحويل تقليديًا.",
+    zeroBaseline: "خط أساس صفري: نسب التحويل غير متاحة.",
+    stageLimit: "تم بلوغ حد المراحل: يتم عرض النافذة المرتبة فقط.",
     notAvailable: "غير متاح"
   }
 };
@@ -115,10 +165,22 @@ export const warningTextKey = (code: string): string => {
       return "duplicateOrder";
     case "duplicate-stage":
       return "duplicateStage";
+    case "missing-order":
+      return "missingOrder";
     case "nonmonotonic":
       return "nonmonotonic";
     case "blank-value":
       return "blankValue";
+    case "missing-stage":
+      return "missingStage";
+    case "missing-value":
+      return "missingValue";
+    case "negative-value":
+      return "negativeValue";
+    case "zero-baseline":
+      return "zeroBaseline";
+    case "stage-limit":
+      return "stageLimit";
     default:
       return "warning";
   }
