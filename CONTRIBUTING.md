@@ -19,7 +19,8 @@ npm run audit
 Keep the visual deterministic and certification-safe. Do not add network
 requests, external assets, privileges, unsafe DOM APIs, or value/alphabetical
 reduction. Preserve the stable GUID and update `CHANGELOG.md` for user-visible
-changes.
+changes. The package wrapper normalizes PBIVIZ ZIP metadata; do not bypass it
+when producing a release hash.
 
 ## Pull requests
 
