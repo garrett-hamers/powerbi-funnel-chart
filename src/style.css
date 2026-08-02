@@ -31,6 +31,11 @@
   --atlyn-border: CanvasText;
 }
 
+.atlyn-funnel[data-high-contrast="true"] .atlyn-bar,
+.atlyn-funnel[data-high-contrast="true"] .atlyn-dimmed {
+  opacity: 1;
+}
+
 .atlyn-summary {
   align-items: baseline;
   display: flex;
@@ -99,6 +104,12 @@
   stroke-width: 2;
 }
 
+.atlyn-bar.atlyn-invalid {
+  fill: none;
+  stroke-dasharray: 1 3;
+  stroke-width: 2;
+}
+
 .atlyn-state-marker {
   fill: none;
   stroke: var(--atlyn-text);
@@ -120,6 +131,7 @@
 .atlyn-chart-label {
   fill: var(--atlyn-text);
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .atlyn-stage-list {
@@ -148,7 +160,7 @@
 
 .atlyn-stage-button:hover,
 .atlyn-stage-button:focus-visible {
-  background: color-mix(in srgb, var(--atlyn-primary) 10%, transparent);
+  background: var(--atlyn-surface);
   outline: 2px solid var(--atlyn-primary);
   outline-offset: 1px;
 }
@@ -172,6 +184,20 @@
 .atlyn-empty {
   color: var(--atlyn-muted);
   margin: 8px;
+}
+
+.atlyn-funnel[data-state="error"] .atlyn-empty {
+  color: var(--atlyn-warning);
+}
+
+.atlyn-accessible-table:focus-visible {
+  clip: auto;
+  height: auto;
+  margin: 0;
+  outline: 2px solid var(--atlyn-primary);
+  overflow: auto;
+  position: static;
+  width: 100%;
 }
 
 .atlyn-funnel[data-compact="true"] {

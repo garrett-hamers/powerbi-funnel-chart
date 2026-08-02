@@ -19,8 +19,9 @@ const readFillColor = (value: unknown): string | undefined => {
   if (!isRecord(value) || !isRecord(value.solid)) {
     return undefined;
   }
-  return typeof value.solid.color === "string" && value.solid.color.trim() !== ""
-    ? value.solid.color
+  const color = value.solid.color;
+  return typeof color === "string" && /^#[0-9a-f]{3,8}$/i.test(color.trim())
+    ? color.trim()
     : undefined;
 };
 

@@ -4,7 +4,7 @@ export interface SourceLike {
   displayName?: string;
   queryName?: string;
   roles?: Record<string, boolean>;
-  format?: string;
+  objects?: Record<string, Record<string, ObjectValueLike>>;
 }
 
 export type ObjectValueLike =
@@ -20,6 +20,7 @@ export interface MetadataLike {
   columns?: SourceLike[];
   objects?: Record<string, Record<string, ObjectValueLike>>;
   segment?: unknown;
+  dataReduction?: unknown;
 }
 
 export interface CategoryColumnLike {
@@ -54,12 +55,15 @@ export interface DataViewLike {
   categorical?: CategoricalDataViewLike;
 }
 
-export type ValueState = "blank" | "zero" | "value" | "negative";
+export type ValueState = "blank" | "zero" | "value" | "negative" | "invalid";
 
 export interface FunnelWarning {
   code:
     | "missing-stage"
     | "missing-value"
+    | "invalid-value"
+    | "invalid-order"
+    | "invalid-target"
     | "duplicate-stage"
     | "inferred-order"
     | "duplicate-order"
@@ -112,14 +116,19 @@ export interface FunnelModel {
 export interface BuildModelOptions {
   blankLabel?: string;
   maxStages?: number;
+  maxVisibleStages?: number;
+  partialData?: boolean;
 }
 
 interface WorkingStage {
   label: string;
   group?: string;
   value: number | null;
+  valueInvalid: boolean;
   target: number | null;
+  targetInvalid: boolean;
   stageOrder: number | null;
+  stageOrderInvalid: boolean;
   modelIndex: number;
   categoryIndex: number;
   seriesIndex: number | null;
@@ -149,49 +158,117 @@ const firstValueColumn = (
 const cellAt = (column: CategoryColumnLike | ValueColumnLike | undefined, index: number): CellValue =>
   column?.values?.[index];
 
-const asNumber = (value: CellValue): number | null => {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === "string" && value.trim() !== "") {
-    const numberValue = Number(value);
-    return Number.isFinite(numberValue) ? numberValue : null;
-  }
-  return null;
-};
-
 const isBlank = (value: CellValue): boolean =>
-  value === null || value === undefined || value === "" || (typeof value === "number" && Number.isNaN(value));
+  value === null ||
+  value === undefined ||
+  value === "" ||
+  (typeof value === "string" && value.trim() === "");
+
+const DEFAULT_MAX_VISIBLE_STAGES = 500;
+
+interface ParsedNumber {
+  value: number | null;
+  blank: boolean;
+  invalid: boolean;
+}
+
+const parseNumber = (value: CellValue): ParsedNumber => {
+  if (isBlank(value)) {
+    return { value: null, blank: true, invalid: false };
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? { value, blank: false, invalid: false }
+      : { value: null, blank: false, invalid: true };
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed)
+      ? { value: parsed, blank: false, invalid: false }
+      : { value: null, blank: false, invalid: true };
+  }
+  return { value: null, blank: false, invalid: true };
+};
 
 const text = (value: CellValue, blankLabel: string): string =>
   isBlank(value) ? blankLabel : String(value);
 
-const stateFor = (value: number | null, source: CellValue): ValueState => {
-  if (isBlank(source) || value === null) {
+const stateFor = (parsed: ParsedNumber): ValueState => {
+  if (parsed.invalid) {
+    return "invalid";
+  }
+  if (parsed.blank || parsed.value === null) {
     return "blank";
   }
-  if (value === 0) {
+  if (parsed.value === 0) {
     return "zero";
   }
-  return value < 0 ? "negative" : "value";
+  return parsed.value < 0 ? "negative" : "value";
 };
 
-const groupName = (value: CellValue): string | undefined =>
-  isBlank(value) ? undefined : String(value);
+const groupName = (value: CellValue, blankLabel: string): string =>
+  isBlank(value) ? blankLabel : String(value);
+
+const formatFor = (source: SourceLike | undefined): string | undefined => {
+  const format = source?.objects?.general?.formatString;
+  return typeof format === "string" ? format : undefined;
+};
+
+const stableIdentityToken = (value: unknown, seen = new WeakSet<object>()): string => {
+  if (value === undefined) {
+    return "undefined";
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "bigint") {
+    return `${value.toString()}n`;
+  }
+  if (typeof value === "function") {
+    return value.name || "function";
+  }
+  if (seen.has(value)) {
+    return "[circular]";
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    const token = `[${value.map((entry) => stableIdentityToken(entry, seen)).join(",")}]`;
+    seen.delete(value);
+    return token;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const token = `{${keys.map((key) => `${JSON.stringify(key)}:${stableIdentityToken(record[key], seen)}`).join(",")}}`;
+  seen.delete(value);
+  return token;
+};
 
 const getTooltips = (
+  categories: CategoryColumnLike[],
   columns: ValueColumnLike[],
   index: number,
-  excluded: Set<ValueColumnLike>
+  excludedCategories: Set<CategoryColumnLike>,
+  excludedColumns: Set<ValueColumnLike>
 ): Array<{ label: string; value: CellValue; format?: string }> =>
-  columns
-    .filter((column) => roleIs(column.source, "Tooltips") && !excluded.has(column))
-    .slice(0, 5)
-    .map((column) => ({
-      label: column.source?.displayName ?? column.source?.queryName ?? "Tooltip",
-      value: cellAt(column, index),
-      format: column.source?.format
-    }));
+  [
+    ...categories
+      .filter((category) => roleIs(category.source, "Tooltips") && !excludedCategories.has(category))
+      .map((category) => ({
+        label: category.source?.displayName ?? category.source?.queryName ?? "Tooltip",
+        value: cellAt(category, index),
+        format: formatFor(category.source)
+      })),
+    ...columns
+      .filter((column) => roleIs(column.source, "Tooltips") && !excludedColumns.has(column))
+      .map((column) => ({
+        label: column.source?.displayName ?? column.source?.queryName ?? "Tooltip",
+        value: cellAt(column, index),
+        format: formatFor(column.source)
+      }))
+  ].slice(0, 5);
 
 const sortStages = (rows: WorkingStage[], explicitOrder: boolean): WorkingStage[] => {
   if (!explicitOrder) {
@@ -230,7 +307,7 @@ const calculateMetrics = (
   const orderValues = rows
     .map((row) => row.stageOrder)
     .filter((order): order is number => order !== null);
-  if (explicitOrder && rows.some((row) => row.stageOrder === null)) {
+  if (explicitOrder && rows.some((row) => row.stageOrder === null && !row.stageOrderInvalid)) {
     warnings.push({
       code: "missing-order",
       group,
@@ -262,7 +339,14 @@ const calculateMetrics = (
   });
 
   rows.forEach((row, index) => {
-    if (row.value === null) {
+    if (row.valueInvalid) {
+      warnings.push({
+        code: "invalid-value",
+        group,
+        stage: row.label,
+        message: "This stage has a non-numeric Value; conversion metrics are unavailable."
+      });
+    } else if (row.value === null) {
       warnings.push({
         code: "blank-value",
         group,
@@ -275,6 +359,22 @@ const calculateMetrics = (
         group,
         stage: row.label,
         message: "Negative values are displayed but are not a conventional conversion funnel."
+      });
+    }
+    if (row.stageOrderInvalid) {
+      warnings.push({
+        code: "invalid-order",
+        group,
+        stage: row.label,
+        message: "This StageOrder is not numeric; the row remains after ordered values in model order."
+      });
+    }
+    if (row.targetInvalid) {
+      warnings.push({
+        code: "invalid-target",
+        group,
+        stage: row.label,
+        message: "This Target is not numeric and is not used for comparison."
       });
     }
     const previousValue = index > 0 ? rows[index - 1].value : null;
@@ -295,13 +395,24 @@ const calculateMetrics = (
     const stageConversion =
       previous !== null && previous > 0 && row.value !== null && row.value >= 0 ? row.value / previous : null;
     return {
-      key: JSON.stringify([group ?? "default", row.categoryIndex, row.seriesIndex, row.label]),
+      key: JSON.stringify([
+        group ?? "default",
+        stableIdentityToken(row.groupIdentity),
+        stableIdentityToken(row.identity),
+        row.categoryIndex,
+        row.seriesIndex,
+        row.label
+      ]),
       label: row.label,
       group,
       value: row.value,
       target: row.target,
       stageOrder: row.stageOrder,
-      valueState: stateFor(row.value, row.value),
+      valueState: stateFor({
+        value: row.value,
+        blank: row.value === null && !row.valueInvalid,
+        invalid: row.valueInvalid
+      }),
       modelIndex: row.modelIndex,
       categoryIndex: row.categoryIndex,
       seriesIndex: row.seriesIndex,
@@ -328,6 +439,7 @@ const calculateMetrics = (
 const rowsFor = (
   stageCategory: CategoryColumnLike | undefined,
   groupCategory: CategoryColumnLike | undefined,
+  categories: CategoryColumnLike[],
   columns: ValueColumnLike[],
   group: string | undefined,
   blankLabel: string,
@@ -338,25 +450,32 @@ const rowsFor = (
   const valueColumn = firstValueColumn(columns, "Value");
   const orderColumn = firstValueColumn(columns, "StageOrder");
   const targetColumn = firstValueColumn(columns, "Target");
-  const excluded = new Set([valueColumn, orderColumn, targetColumn].filter((column): column is ValueColumnLike => Boolean(column)));
+  const excludedColumns = new Set([valueColumn, orderColumn, targetColumn].filter((column): column is ValueColumnLike => Boolean(column)));
+  const excludedCategories = new Set([stageCategory, groupCategory].filter((category): category is CategoryColumnLike => Boolean(category)));
 
   return stages.map((stageValue, index) => {
     const rawValue = cellAt(valueColumn, index);
+    const parsedValue = parseNumber(rawValue);
+    const parsedTarget = parseNumber(cellAt(targetColumn, index));
+    const parsedOrder = parseNumber(cellAt(orderColumn, index));
     return {
       label: text(stageValue, blankLabel),
-      group: group ?? groupName(cellAt(groupCategory, index)),
-      value: asNumber(rawValue),
-      target: asNumber(cellAt(targetColumn, index)),
-      stageOrder: asNumber(cellAt(orderColumn, index)),
+      group: group ?? (groupCategory ? groupName(cellAt(groupCategory, index), blankLabel) : undefined),
+      value: parsedValue.value,
+      valueInvalid: parsedValue.invalid,
+      target: parsedTarget.value,
+      targetInvalid: parsedTarget.invalid,
+      stageOrder: parsedOrder.value,
+      stageOrderInvalid: parsedOrder.invalid,
       modelIndex: index,
       categoryIndex: index,
       seriesIndex,
       identity: stageCategory?.identity?.[index],
       groupIdentity: groupIdentity ?? groupCategory?.identity?.[index],
       highlighted: valueColumn?.highlights?.[index] === undefined || valueColumn.highlights[index] !== null,
-      tooltipValues: getTooltips(columns, index, excluded),
-      valueFormat: valueColumn?.source?.format,
-      targetFormat: targetColumn?.source?.format
+      tooltipValues: getTooltips(categories, columns, index, excludedCategories, excludedColumns),
+      valueFormat: formatFor(valueColumn?.source),
+      targetFormat: formatFor(targetColumn?.source)
     };
   });
 };
@@ -364,6 +483,7 @@ const rowsFor = (
 export const buildFunnelModel = (dataView: DataViewLike | undefined, options: BuildModelOptions = {}): FunnelModel => {
   const blankLabel = options.blankLabel ?? "(Blank)";
   const maxStages = Math.max(1, options.maxStages ?? 50);
+  const maxVisibleStages = Math.max(1, options.maxVisibleStages ?? DEFAULT_MAX_VISIBLE_STAGES);
   const categories = dataView?.categorical?.categories ?? [];
   const columns = dataView?.categorical?.values ?? [];
   const stageCategory = firstCategory(categories, "Stage");
@@ -371,7 +491,8 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
   const valueColumn = firstValueColumn(columns, "Value");
   const stageOrderColumn = firstValueColumn(columns, "StageOrder");
   const warnings: FunnelWarning[] = [];
-  const isSegmented = Boolean(dataView?.metadata && "segment" in dataView.metadata);
+  const isSegmented = Boolean(dataView?.metadata?.segment) || options.partialData === true;
+  const isReduced = Boolean(dataView?.metadata?.dataReduction);
 
   if (!stageCategory) {
     warnings.push({
@@ -394,7 +515,7 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
       groups: [],
       truncated: false,
       reducedCount: 0,
-      completeness: isSegmented ? "partial-segment" : "complete"
+      completeness: isSegmented ? "partial-segment" : isReduced ? "ordered-window" : "complete"
     };
   }
 
@@ -406,10 +527,12 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
       message: "StageOrder is not assigned; model order is displayed and is not alphabetically sorted."
     });
   }
-  if (isSegmented) {
+  if (isSegmented || isReduced) {
     warnings.push({
       code: "partial-data",
-      message: "The host supplied a data segment; conversion metrics describe the supplied segment only."
+      message: isSegmented
+        ? "The host supplied a data segment; conversion metrics describe the supplied segment only."
+        : "The host applied data reduction; conversion metrics describe the supplied ordered window only."
     });
   }
 
@@ -441,26 +564,36 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
     grouped.some((entry) => entry.name !== undefined || entry.identity !== undefined);
   if (hasSeriesGroups) {
     grouped.forEach((entry, groupIndex) => {
-      const group = groupName(entry.name) ?? `Group ${groupIndex + 1}`;
+      const group = isBlank(entry.name) ? `Group ${groupIndex + 1}` : groupName(entry.name, blankLabel);
       seenGroups.add(group);
       addGroupRows(
-        rowsFor(stageCategory, groupCategory, entry.values ?? columns, group, blankLabel, groupIndex, entry.identity),
+        rowsFor(stageCategory, groupCategory, categories, entry.values ?? columns, group, blankLabel, groupIndex, entry.identity),
         group
       );
     });
   } else {
-    const rows = rowsFor(stageCategory, groupCategory, columns, undefined, blankLabel);
+    const rows = rowsFor(stageCategory, groupCategory, categories, columns, undefined, blankLabel);
     rows.forEach((row) => {
       if (row.group) {
         seenGroups.add(row.group);
       }
     });
     const byGroup = groupCategory
-      ? [...new Set(rows.map((row) => row.group ?? "Default"))].map((group) => rows.filter((row) => (row.group ?? "Default") === group))
+      ? [...new Set(rows.map((row) => row.group ?? blankLabel))].map((group) => rows.filter((row) => (row.group ?? blankLabel) === group))
       : [rows];
     byGroup.forEach((groupRows, groupIndex) => {
       const group = groupCategory ? (groupRows[0]?.group ?? `Group ${groupIndex + 1}`) : undefined;
       addGroupRows(groupRows, group);
+    });
+  }
+  if (stageGroups.length > maxVisibleStages) {
+    const omitted = stageGroups.length - maxVisibleStages;
+    stageGroups.splice(maxVisibleStages);
+    truncated = true;
+    reducedCount += omitted;
+    warnings.unshift({
+      code: "stage-limit",
+      message: `The visual render limit is ${maxVisibleStages} rows; ${omitted} supplied row(s) are outside the rendered window.`
     });
   }
 
@@ -472,6 +605,6 @@ export const buildFunnelModel = (dataView: DataViewLike | undefined, options: Bu
     groups: [...seenGroups],
     truncated,
     reducedCount,
-    completeness: isSegmented ? "partial-segment" : truncated ? "ordered-window" : "complete"
+    completeness: isSegmented ? "partial-segment" : isReduced || truncated ? "ordered-window" : "complete"
   };
 };

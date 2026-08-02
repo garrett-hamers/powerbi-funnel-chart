@@ -3,7 +3,6 @@
   "supportsHighlight": true,
   "supportsKeyboardFocus": true,
   "supportsMultiVisualSelection": true,
-  "supportsLandingPage": true,
   "supportsEmptyDataView": true,
   "tooltips": {
     "supportedTypes": {
@@ -117,6 +116,11 @@
             {
               "for": {
                 "in": "Group"
+              }
+            },
+            {
+              "for": {
+                "in": "Tooltips"
               }
             }
           ],

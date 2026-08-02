@@ -10,6 +10,7 @@
     "lint": "npm run eslint",
     "test": "jest --runInBand",
     "package": "node scripts/package.cjs",
+    "certification-audit": "node scripts/certification-audit.cjs",
     "audit": "npm audit"
   },
   "dependencies": {

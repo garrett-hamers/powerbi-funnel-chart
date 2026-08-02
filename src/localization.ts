@@ -25,8 +25,12 @@ const translations: Record<string, Messages> = {
     tableLabel: "Accessible funnel metrics",
     stageListLabel: "Funnel stages",
     noData: "Add Stage and Value fields to view the funnel.",
+    renderError: "The funnel could not be rendered.",
     missingStage: "Missing Stage field.",
     missingValue: "Missing Value measure.",
+    invalidValue: "Invalid numeric Value; conversion metrics are unavailable.",
+    invalidOrder: "Invalid StageOrder; the row remains in model order after valid orders.",
+    invalidTarget: "Invalid Target; the benchmark is unavailable for this stage.",
     inferredOrder: "Inferred order: model order is preserved.",
     duplicateOrder: "Duplicate StageOrder: model order breaks ties.",
     duplicateStage: "Duplicate stage label preserved.",
@@ -56,8 +60,12 @@ const translations: Record<string, Messages> = {
     tableLabel: "Métricas de embudo accesibles",
     stageListLabel: "Etapas del embudo",
     noData: "Agregue campos Stage y Value para ver el embudo.",
+    renderError: "No se pudo representar el embudo.",
     missingStage: "Falta el campo Stage.",
     missingValue: "Falta la medida Value.",
+    invalidValue: "Valor numérico no válido; las métricas de conversión no están disponibles.",
+    invalidOrder: "StageOrder no válido; la fila conserva el orden del modelo después de los órdenes válidos.",
+    invalidTarget: "Objetivo no válido; la referencia no está disponible para esta etapa.",
     inferredOrder: "Orden inferido: se conserva el orden del modelo.",
     duplicateOrder: "StageOrder duplicado: el orden del modelo resuelve los empates.",
     duplicateStage: "Etiqueta de etapa duplicada conservada.",
@@ -84,8 +92,12 @@ const translations: Record<string, Messages> = {
     tableLabel: "Mesures de l'entonnoir accessibles",
     stageListLabel: "Étapes de l'entonnoir",
     noData: "Ajoutez les champs Stage et Value pour afficher l'entonnoir.",
+    renderError: "L'entonnoir n'a pas pu être rendu.",
     missingStage: "Le champ Stage est manquant.",
     missingValue: "La mesure Value est manquante.",
+    invalidValue: "Valeur numérique non valide ; les mesures de conversion sont indisponibles.",
+    invalidOrder: "StageOrder non valide ; la ligne reste dans l'ordre du modèle après les ordres valides.",
+    invalidTarget: "Cible non valide ; la référence est indisponible pour cette étape.",
     inferredOrder: "Ordre déduit : l'ordre du modèle est conservé.",
     duplicateOrder: "StageOrder en double : l'ordre du modèle départage les égalités.",
     duplicateStage: "Libellé d'étape en double conservé.",
@@ -112,8 +124,12 @@ const translations: Record<string, Messages> = {
     tableLabel: "Barrierefreie Trichtermetriken",
     stageListLabel: "Trichterstufen",
     noData: "Fügen Sie Stage- und Value-Felder hinzu.",
+    renderError: "Der Trichter konnte nicht gerendert werden.",
     missingStage: "Das Stage-Feld fehlt.",
     missingValue: "Das Value-Maß fehlt.",
+    invalidValue: "Ungültiger numerischer Wert; Konversionsmetriken sind nicht verfügbar.",
+    invalidOrder: "Ungültige StageOrder; die Zeile bleibt nach gültigen Werten in Modellreihenfolge.",
+    invalidTarget: "Ungültiges Ziel; der Benchmark ist für diese Stufe nicht verfügbar.",
     inferredOrder: "Abgeleitete Reihenfolge: Die Modellreihenfolge bleibt erhalten.",
     duplicateOrder: "Doppeltes StageOrder: Die Modellreihenfolge löst Gleichstände.",
     duplicateStage: "Doppelte Stufenbezeichnung beibehalten.",
@@ -140,8 +156,12 @@ const translations: Record<string, Messages> = {
     tableLabel: "مقاييس مسار التحويل الميسّرة",
     stageListLabel: "مراحل مسار التحويل",
     noData: "أضف حقلي Stage وValue لعرض المسار.",
+    renderError: "تعذر عرض مسار التحويل.",
     missingStage: "حقل Stage مفقود.",
     missingValue: "مقياس Value مفقود.",
+    invalidValue: "قيمة رقمية غير صالحة؛ مقاييس التحويل غير متاحة.",
+    invalidOrder: "ترتيب StageOrder غير صالح؛ تبقى الصفوف بترتيب النموذج بعد الترتيبات الصالحة.",
+    invalidTarget: "هدف غير صالح؛ المعيار غير متاح لهذه المرحلة.",
     inferredOrder: "ترتيب مستنتج: تم الحفاظ على ترتيب النموذج.",
     duplicateOrder: "StageOrder مكرر: ترتيب النموذج يحسم التعادل.",
     duplicateStage: "تم الحفاظ على تسمية المرحلة المكررة.",
@@ -160,10 +180,18 @@ const translations: Record<string, Messages> = {
 const rtlLocales = /^(ar|fa|he|ur)(-|$)/i;
 
 export const createLocalizer = (requestedLocale?: string): Localizer => {
-  const locale = requestedLocale || "en-US";
+  const requested = requestedLocale?.trim() || "en-US";
+  let locale = "en-US";
+  try {
+    locale = Intl.NumberFormat.supportedLocalesOf([requested])[0] ?? "en-US";
+  } catch (error) {
+    if (!(error instanceof RangeError)) {
+      throw error;
+    }
+  }
   const language = locale.toLowerCase().split("-")[0];
   const messages = translations[language] ?? translations.en;
-  const formatterLocale = locale || "en-US";
+  const formatterLocale = locale;
   return {
     locale,
     direction: rtlLocales.test(locale) ? "rtl" : "ltr",
@@ -199,6 +227,12 @@ export const warningTextKey = (code: string): string => {
       return "missingStage";
     case "missing-value":
       return "missingValue";
+    case "invalid-value":
+      return "invalidValue";
+    case "invalid-order":
+      return "invalidOrder";
+    case "invalid-target":
+      return "invalidTarget";
     case "negative-value":
       return "negativeValue";
     case "zero-baseline":

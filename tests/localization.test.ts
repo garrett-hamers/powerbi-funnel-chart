@@ -23,6 +23,9 @@ describe("localization", () => {
     const warningCodes = [
       "missing-stage",
       "missing-value",
+      "invalid-value",
+      "invalid-order",
+      "invalid-target",
       "inferred-order",
       "duplicate-order",
       "duplicate-stage",
