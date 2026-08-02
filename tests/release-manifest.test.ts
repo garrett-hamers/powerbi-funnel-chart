@@ -9,6 +9,8 @@ describe("release manifest gate", () => {
       schemaVersion: number;
       visual: { guid: string; version: string };
       package: { filename: string; sha256: string; bytes: number };
+      reproducible: boolean;
+      zipNormalization: { entryTimestamp: string; compression: string; compressionLevel: number };
       sourceCommit: string;
     };
 
@@ -19,6 +21,12 @@ describe("release manifest gate", () => {
     expect(manifest.package.filename).toBe("atlynFunnelA1B2C3D4.1.0.0.0.pbiviz");
     expect(manifest.package.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(manifest.package.bytes).toBeGreaterThan(0);
+    expect(manifest.reproducible).toBe(true);
+    expect(manifest.zipNormalization).toEqual({
+      entryTimestamp: "1980-01-01T00:00:00.000Z",
+      compression: "DEFLATE",
+      compressionLevel: 9
+    });
     expect(manifest.sourceCommit).toMatch(/^[0-9a-f]{40}$/);
   });
 });

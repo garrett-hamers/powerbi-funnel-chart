@@ -63,6 +63,9 @@ requireCondition(manifest.visual?.version === pbiviz.visual?.version, "release m
 requireCondition(manifest.package?.filename === expectedArtifact, "release manifest filename must match the package output");
 requireCondition(typeof manifest.package?.sha256 === "string" && /^[a-f0-9]{64}$/.test(manifest.package.sha256), "release manifest must contain a SHA-256 package hash");
 requireCondition(manifest.package?.bytes > 0, "release manifest must contain the package byte size");
+requireCondition(manifest.reproducible === true, "release manifest must require reproducible package output");
+requireCondition(manifest.zipNormalization?.entryTimestamp === "1980-01-01T00:00:00.000Z", "release manifest must record fixed ZIP entry timestamps");
+requireCondition(manifest.zipNormalization?.compression === "DEFLATE" && manifest.zipNormalization?.compressionLevel === 9, "release manifest must record fixed ZIP compression");
 requireCondition(manifest.sourceCommit === currentCommit || typeof manifest.sourceCommit === "string", "release manifest must record a source commit");
 if (manifest.sourceCommit && currentCommit && manifest.sourceCommit !== currentCommit) {
   try {

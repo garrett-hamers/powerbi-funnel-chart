@@ -59,6 +59,12 @@ const manifest = {
     sha256,
     bytes: stats.size
   },
+  reproducible: true,
+  zipNormalization: {
+    entryTimestamp: "1980-01-01T00:00:00.000Z",
+    compression: "DEFLATE",
+    compressionLevel: 9
+  },
   sourceCommit,
   packageVersion: packageJson.version,
   privileges: capabilities.privileges,
