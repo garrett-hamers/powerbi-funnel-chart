@@ -44,5 +44,6 @@ npm run audit
 The stable visual GUID is `atlynFunnelA1B2C3D4`. `capabilities.json` intentionally
 declares `privileges: []`; the visual uses no network access, external assets, or
 custom download APIs. Certification and real-host validation are not claimed by
-this repository. The full dependency audit and certification audit are required
-release gates.
+this repository. Packaging normalizes PBIVIZ ZIP entry timestamps and DEFLATE
+settings, so the release-manifest SHA-256 is reproducible from identical source.
+The full dependency audit and certification audit are required release gates.

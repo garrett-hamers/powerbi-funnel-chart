@@ -9,10 +9,16 @@
   },
   "package": {
     "filename": "atlynFunnelA1B2C3D4.1.0.0.0.pbiviz",
-    "sha256": "01404785358f31aefe575385b7536e5b3b605ca1295e985abc2617502bec4575",
-    "bytes": 48921
+    "sha256": "a27ef7a4311ac885501fb3deec1cb1685d9ec72e68c6e236af75c7d92d3574d9",
+    "bytes": 49034
   },
-  "sourceCommit": "37005c3cfbfa076bd2b505faa3bab69161728e47",
+  "reproducible": true,
+  "zipNormalization": {
+    "entryTimestamp": "1980-01-01T00:00:00.000Z",
+    "compression": "DEFLATE",
+    "compressionLevel": 9
+  },
+  "sourceCommit": "63891b339af027dcec010d32c8892398a4ffe7ef",
   "packageVersion": "1.0.0",
   "privileges": [],
   "externalJS": []
