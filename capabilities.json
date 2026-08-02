@@ -18,15 +18,19 @@
   "dataRoles": [
     {
       "displayName": "Stage",
+      "displayNameKey": "Role_Stage_DisplayNameKey",
       "name": "Stage",
       "kind": "Grouping",
-      "description": "Ordered process stage"
+      "description": "Ordered process stage",
+      "descriptionKey": "Role_Stage_DescriptionKey"
     },
     {
       "displayName": "Value",
+      "displayNameKey": "Role_Value_DisplayNameKey",
       "name": "Value",
       "kind": "Measure",
       "description": "Stage volume or amount",
+      "descriptionKey": "Role_Value_DescriptionKey",
       "requiredTypes": [
         {
           "numeric": true
@@ -35,9 +39,11 @@
     },
     {
       "displayName": "Stage order",
+      "displayNameKey": "Role_StageOrder_DisplayNameKey",
       "name": "StageOrder",
       "kind": "Measure",
       "description": "Optional numeric order; ties are diagnosed",
+      "descriptionKey": "Role_StageOrder_DescriptionKey",
       "requiredTypes": [
         {
           "numeric": true
@@ -46,9 +52,11 @@
     },
     {
       "displayName": "Target",
+      "displayNameKey": "Role_Target_DisplayNameKey",
       "name": "Target",
       "kind": "Measure",
       "description": "Optional benchmark for each stage",
+      "descriptionKey": "Role_Target_DescriptionKey",
       "requiredTypes": [
         {
           "numeric": true
@@ -57,15 +65,19 @@
     },
     {
       "displayName": "Group",
+      "displayNameKey": "Role_Group_DisplayNameKey",
       "name": "Group",
       "kind": "Grouping",
-      "description": "Optional segment"
+      "description": "Optional segment",
+      "descriptionKey": "Role_Group_DescriptionKey"
     },
     {
       "displayName": "Tooltips",
+      "displayNameKey": "Role_Tooltips_DisplayNameKey",
       "name": "Tooltips",
       "kind": "GroupingOrMeasure",
-      "description": "Optional detail fields (up to five)"
+      "description": "Optional detail fields (up to five)",
+      "descriptionKey": "Role_Tooltips_DescriptionKey"
     }
   ],
   "dataViewMappings": [
@@ -100,11 +112,6 @@
             {
               "for": {
                 "in": "Stage"
-              },
-              "dataReductionAlgorithm": {
-                "window": {
-                  "count": 50
-                }
               }
             },
             {
@@ -112,7 +119,12 @@
                 "in": "Group"
               }
             }
-          ]
+          ],
+          "dataReductionAlgorithm": {
+            "window": {
+              "count": 50
+            }
+          }
         },
         "values": {
           "select": [
@@ -143,8 +155,14 @@
   ],
   "objects": {
     "dataPoint": {
+      "displayName": "Data points",
+      "displayNameKey": "Object_DataPoint_DisplayNameKey",
       "properties": {
         "fill": {
+          "displayName": "Fill",
+          "displayNameKey": "Property_DataPointFill_DisplayNameKey",
+          "description": "Color used for positive data points.",
+          "descriptionKey": "Property_DataPointFill_DescriptionKey",
           "type": {
             "fill": {
               "solid": {
@@ -156,8 +174,14 @@
       }
     },
     "labels": {
+      "displayName": "Labels",
+      "displayNameKey": "Object_Labels_DisplayNameKey",
       "properties": {
         "show": {
+          "displayName": "Show chart labels",
+          "displayNameKey": "Property_LabelsShow_DisplayNameKey",
+          "description": "Show stage labels and values on the chart.",
+          "descriptionKey": "Property_LabelsShow_DescriptionKey",
           "type": {
             "bool": true
           }

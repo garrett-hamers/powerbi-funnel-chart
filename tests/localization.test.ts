@@ -9,6 +9,10 @@ describe("localization", () => {
     expect(localizer.number(null)).toBe("غير متاح");
   });
 
+  test("uses Power BI measure format strings for numeric values", () => {
+    expect(createLocalizer("en-US").number(1234.5, undefined, "$#,0.00")).toBe("$1,234.50");
+  });
+
   test("falls back to English for unsupported languages", () => {
     const localizer = createLocalizer("xx-XX");
     expect(localizer.direction).toBe("ltr");
@@ -27,7 +31,8 @@ describe("localization", () => {
       "blank-value",
       "negative-value",
       "zero-baseline",
-      "stage-limit"
+      "stage-limit",
+      "partial-data"
     ];
     const spanish = createLocalizer("es-ES");
     warningCodes.forEach((code) => {

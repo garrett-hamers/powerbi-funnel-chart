@@ -1,19 +1,41 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { isPackageSuccess } = require("./package-utils.cjs");
 
-const executable = process.platform === "win32" ? "npx.cmd" : "npx";
-const result = spawnSync(executable, ["pbiviz", "package", "--no-stats"], {
+const isWindows = process.platform === "win32";
+const executable = isWindows ? process.env.ComSpec ?? "cmd.exe" : "npx";
+const args = isWindows
+  ? ["/d", "/s", "/c", "npx.cmd pbiviz package --no-stats"]
+  : ["pbiviz", "package", "--no-stats"];
+const dist = path.resolve(__dirname, "..", "dist");
+const beforeArtifacts = new Map(
+  fs.existsSync(dist)
+    ? fs.readdirSync(dist)
+      .filter((entry) => entry.endsWith(".pbiviz"))
+      .map((entry) => {
+        const stats = fs.statSync(path.join(dist, entry));
+        return [entry, { mtimeMs: stats.mtimeMs, size: stats.size }];
+      })
+    : []
+);
+const result = spawnSync(executable, args, {
   stdio: "inherit",
   shell: false
 });
-const dist = path.resolve(__dirname, "..", "dist");
 const packageCreated = fs.existsSync(dist) &&
-  fs.readdirSync(dist).some((entry) => entry.endsWith(".pbiviz"));
+  fs.readdirSync(dist)
+    .filter((entry) => entry.endsWith(".pbiviz"))
+    .some((entry) => {
+      const stats = fs.statSync(path.join(dist, entry));
+      const previous = beforeArtifacts.get(entry);
+      return !previous || previous.mtimeMs !== stats.mtimeMs || previous.size !== stats.size;
+    });
 
-if (result.status !== 0 && !packageCreated) {
-  process.exit(result.status ?? 1);
+if (result.error) {
+  process.stderr.write(`pbiviz failed to start: ${result.error.message}\n`);
+  process.exit(1);
 }
-if (result.status !== 0) {
-  process.stdout.write("pbiviz emitted the package before its Node/Webpack logger exit; artifact verified.\n");
+if (!isPackageSuccess(result.status, packageCreated)) {
+  process.exit(result.status ?? 1);
 }

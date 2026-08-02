@@ -1,0 +1,22 @@
+{
+  "Role_Stage_DisplayNameKey": "Stage",
+  "Role_Stage_DescriptionKey": "Ordered process stage",
+  "Role_Value_DisplayNameKey": "Value",
+  "Role_Value_DescriptionKey": "Stage volume or amount",
+  "Role_StageOrder_DisplayNameKey": "Stage order",
+  "Role_StageOrder_DescriptionKey": "Optional numeric order; ties are diagnosed",
+  "Role_Target_DisplayNameKey": "Target",
+  "Role_Target_DescriptionKey": "Optional benchmark for each stage",
+  "Role_Group_DisplayNameKey": "Group",
+  "Role_Group_DescriptionKey": "Optional segment",
+  "Role_Tooltips_DisplayNameKey": "Tooltips",
+  "Role_Tooltips_DescriptionKey": "Optional detail fields (up to five)",
+  "FormatCard_DisplayNameKey": "Funnel",
+  "FormatCard_DescriptionKey": "Configure the funnel appearance.",
+  "Object_DataPoint_DisplayNameKey": "Data points",
+  "Property_DataPointFill_DisplayNameKey": "Fill",
+  "Property_DataPointFill_DescriptionKey": "Color used for positive data points.",
+  "Object_Labels_DisplayNameKey": "Labels",
+  "Property_LabelsShow_DisplayNameKey": "Show chart labels",
+  "Property_LabelsShow_DescriptionKey": "Show stage labels and values on the chart."
+}
