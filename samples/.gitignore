@@ -1,0 +1,5 @@
+# Power BI Desktop writes these per-user files next to a project; they are machine
+# specific and must never be committed.
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+**/.pbi/unappliedChanges.json

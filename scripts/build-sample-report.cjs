@@ -14,6 +14,7 @@
  *
  * Output is deterministic: fixed names, fixed key order, two-space JSON, LF endings.
  */
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const JSZip = require("jszip");
@@ -53,6 +54,11 @@ const writeJson = (absolutePath, value) => {
   fs.writeFileSync(absolutePath, `${JSON.stringify(value, null, 2)}\n`.replace(/\r\n/g, "\n"));
 };
 
+const writeText = (absolutePath, lines) => {
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+  fs.writeFileSync(absolutePath, `${lines.join("\n")}\n`);
+};
+
 const readCsv = (relativePath) => {
   const lines = fs.readFileSync(path.join(root, relativePath), "utf8")
     .split(/\r?\n/)
@@ -64,53 +70,68 @@ const readCsv = (relativePath) => {
   });
 };
 
-const mText = (value) => `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '""')}"`;
-const mNumber = (value) => (value === "" || value === undefined ? "null" : String(Number(value)));
+/* Stable lineage tags so regenerating the project never churns the committed files. */
+const lineageTag = (seed) => {
+  const hash = crypto.createHash("sha1").update(`atlyn-funnel-sample|${seed}`).digest("hex");
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    hash.slice(12, 16),
+    hash.slice(16, 20),
+    hash.slice(20, 32)
+  ].join("-");
+};
 
 /*
- * Builds an M expression whose only source is an inline #table literal. Nothing here
- * can reach a database, a file, or the network.
+ * DATATABLE accepts constants plus DATE, TIME and BLANK, and treats a missing value as
+ * BLANK(), so an empty cell becomes a real blank rather than a zero.
  */
-const inlineTableExpression = (columns, rows) => [
-  "let",
-  "    Source = #table(",
-  `        type table [${columns.map((column) => `#"${column.name}" = ${column.mType}`).join(", ")}],`,
-  "        {",
-  ...rows.map((row, index) => {
-    const cells = columns.map((column) =>
-      column.mType === "text" ? mText(row[column.name]) : mNumber(row[column.name])
-    );
-    return `            {${cells.join(", ")}}${index === rows.length - 1 ? "" : ","}`;
-  }),
-  "        }",
-  "    )",
-  "in",
-  "    Source"
-];
+const daxLiteral = (value, daxType) => {
+  if (daxType === "STRING") {
+    return `"${String(value).replace(/"/g, '""')}"`;
+  }
+  return value === "" || value === undefined ? "BLANK()" : String(Number(value));
+};
 
-const tmslColumn = (name, dataType) => ({
-  name,
-  dataType,
-  sourceColumn: name,
-  summarizeBy: dataType === "int64" ? "sum" : "none",
-  annotations: [{ name: "SummarizationSetBy", value: "Automatic" }]
-});
-
-const tmslTable = (name, columns, rows) => ({
-  name,
-  columns: columns.map((column) => tmslColumn(column.name, column.tmslType)),
-  partitions: [
-    {
-      name,
-      mode: "import",
-      source: {
-        type: "m",
-        expression: inlineTableExpression(columns, rows)
-      }
+/*
+ * Emits a TMDL calculated table whose only source is an inline DAX DATATABLE. A
+ * calculated table has no data source object at all, so the model never prompts for
+ * credentials and has nothing to refresh against.
+ */
+const tmdlTable = (tableName, columns, rows) => {
+  const lines = [`table '${tableName}'`, `\tlineageTag: ${lineageTag(`table|${tableName}`)}`, ""];
+  columns.forEach((column) => {
+    lines.push(`\tcolumn '${column.name}'`);
+    if (column.daxType !== "STRING") {
+      lines.push("\t\tformatString: 0");
     }
-  ],
-  annotations: [{ name: "PBI_ResultType", value: "Table" }]
-});
+    lines.push(`\t\tlineageTag: ${lineageTag(`column|${tableName}|${column.name}`)}`);
+    lines.push(`\t\tsummarizeBy: ${column.daxType === "STRING" ? "none" : "sum"}`);
+    lines.push("\t\tisNameInferred");
+    lines.push(`\t\tsourceColumn: [${column.name}]`);
+    lines.push("");
+    lines.push("\t\tannotation SummarizationSetBy = Automatic");
+    lines.push("");
+  });
+  lines.push(`\tpartition '${tableName}' = calculated`);
+  lines.push("\t\tmode: import");
+  lines.push("\t\tsource = ```");
+  lines.push("\t\t\t\tDATATABLE(");
+  columns.forEach((column) => {
+    lines.push(`\t\t\t\t    "${column.name}", ${column.daxType},`);
+  });
+  lines.push("\t\t\t\t    {");
+  rows.forEach((row, index) => {
+    const cells = columns.map((column) => daxLiteral(row[column.name], column.daxType));
+    lines.push(`\t\t\t\t        {${cells.join(", ")}}${index === rows.length - 1 ? "" : ","}`);
+  });
+  lines.push("\t\t\t\t    }");
+  lines.push("\t\t\t\t)");
+  lines.push("\t\t\t\t");
+  lines.push("\t\t\t\t```");
+  lines.push("");
+  return lines;
+};
 
 const columnProjection = (entity, property) => ({
   field: {
@@ -209,15 +230,15 @@ const main = async () => {
   const stageRows = readCsv("assets/sample-data/atlyn-funnel-sample.csv");
   const diagnosticsRows = readCsv("assets/sample-data/atlyn-funnel-diagnostics-sample.csv");
   const stageColumns = [
-    { name: "Stage", mType: "text", tmslType: "string" },
-    { name: "StageOrder", mType: "Int64.Type", tmslType: "int64" },
-    { name: "Segment", mType: "text", tmslType: "string" },
-    { name: "Value", mType: "Int64.Type", tmslType: "int64" },
-    { name: "Target", mType: "Int64.Type", tmslType: "int64" }
+    { name: "Stage", daxType: "STRING" },
+    { name: "StageOrder", daxType: "INTEGER" },
+    { name: "Segment", daxType: "STRING" },
+    { name: "Value", daxType: "INTEGER" },
+    { name: "Target", daxType: "INTEGER" }
   ];
   const diagnosticsColumns = [
-    { name: "Stage", mType: "text", tmslType: "string" },
-    { name: "Value", mType: "Int64.Type", tmslType: "int64" }
+    { name: "Stage", daxType: "STRING" },
+    { name: "Value", daxType: "INTEGER" }
   ];
 
   fs.rmSync(projectRoot, { recursive: true, force: true });
@@ -231,30 +252,39 @@ const main = async () => {
 
   writeJson(path.join(modelRoot, "definition.pbism"), {
     $schema: SCHEMA.pbism,
-    version: "1.0",
+    version: "4.0",
     settings: {}
   });
 
-  writeJson(path.join(modelRoot, "model.bim"), {
-    name: projectName,
-    compatibilityLevel: 1550,
-    model: {
-      culture: "en-US",
-      dataAccessOptions: {
-        legacyRedirects: true,
-        returnErrorValuesAsNull: true
-      },
-      defaultPowerBIDataSourceVersion: "powerBI_V3",
-      sourceQueryCulture: "en-US",
-      tables: [
-        tmslTable(STAGES_TABLE, stageColumns, stageRows),
-        tmslTable(DIAGNOSTICS_TABLE, diagnosticsColumns, diagnosticsRows)
-      ],
-      annotations: [
-        { name: "PBI_QueryOrder", value: JSON.stringify([STAGES_TABLE, DIAGNOSTICS_TABLE]) },
-        { name: "__PBI_TimeIntelligenceEnabled", value: "0" }
-      ]
-    }
+  writeText(path.join(modelRoot, "definition", "database.tmdl"), [
+    "database",
+    "\tcompatibilityLevel: 1550"
+  ]);
+
+  const modelTables = [
+    { name: STAGES_TABLE, columns: stageColumns, rows: stageRows },
+    { name: DIAGNOSTICS_TABLE, columns: diagnosticsColumns, rows: diagnosticsRows }
+  ];
+
+  writeText(path.join(modelRoot, "definition", "model.tmdl"), [
+    "model Model",
+    "\tculture: en-US",
+    "\tdefaultPowerBIDataSourceVersion: powerBI_V3",
+    "\tsourceQueryCulture: en-US",
+    "\tdataAccessOptions",
+    "\t\tlegacyRedirects",
+    "\t\treturnErrorValuesAsNull",
+    "",
+    "annotation __PBI_TimeIntelligenceEnabled = 0",
+    "",
+    ...modelTables.map((table) => `ref table '${table.name}'`)
+  ]);
+
+  modelTables.forEach((table) => {
+    writeText(
+      path.join(modelRoot, "definition", "tables", `${table.name}.tmdl`),
+      tmdlTable(table.name, table.columns, table.rows)
+    );
   });
 
   writeJson(path.join(reportRoot, "definition.pbir"), {

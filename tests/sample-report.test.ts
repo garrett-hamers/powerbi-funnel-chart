@@ -9,12 +9,9 @@ interface SampleReportInspection {
   visuals: Array<{ path: string; visualType?: string; roles: string[] }>;
   projectName?: string;
   model?: {
-    model?: {
-      tables?: Array<{
-        name: string;
-        partitions?: Array<{ source?: { type?: string; expression?: string[] } }>;
-      }>;
-    };
+    pbismVersion?: string;
+    referencedTables?: string[];
+    tables: Array<{ name: string; file: string; contents: string }>;
   };
   embeddedPackage?: { visual?: { guid?: string; version?: string } };
 }
@@ -66,7 +63,8 @@ describe("offline sample report project", () => {
       `${projectName}.Report/definition/report.json`,
       `${projectName}.Report/definition/pages/pages.json`,
       `${projectName}.SemanticModel/definition.pbism`,
-      `${projectName}.SemanticModel/model.bim`
+      `${projectName}.SemanticModel/definition/database.tmdl`,
+      `${projectName}.SemanticModel/definition/model.tmdl`
     ].forEach((file) => {
       expect(inspection.files).toContain(file);
     });
@@ -103,18 +101,21 @@ describe("offline sample report project", () => {
     expect(report).toContain("\"type\": \"CustomVisual\"");
   });
 
-  test("loads all data from inline literals with no external connection", () => {
-    const tables = inspection.model?.model?.tables ?? [];
+  test("loads all data from DAX calculated tables, so the model has no data source", () => {
+    const tables = inspection.model?.tables ?? [];
     expect(tables.length).toBeGreaterThanOrEqual(1);
+    expect(inspection.model?.pbismVersion).toMatch(/^4\./);
     tables.forEach((table) => {
-      (table.partitions ?? []).forEach((partition) => {
-        expect(partition.source?.type).toBe("m");
-        const expression = (partition.source?.expression ?? []).join("\n");
-        expect(expression).toContain("#table(");
-        expect(expression).not.toMatch(/https?:\/\//);
-        expect(expression).not.toMatch(/\b(Sql|Web|File|Folder|Csv|Excel|Odbc|OData|SharePoint)\./);
-      });
+      expect(table.contents).toMatch(/partition .+ = calculated/);
+      expect(table.contents).toContain("DATATABLE(");
+      expect(table.contents).not.toContain("#table(");
+      expect(table.contents).not.toMatch(/https?:\/\//);
+      expect(table.contents).not.toMatch(/\b(Sql|Web|File|Folder|Csv|Excel|Odbc|OData|SharePoint)\./);
+      expect(table.contents).not.toMatch(/\bdataSource\b/);
     });
+    expect(inspection.model?.referencedTables?.sort()).toEqual(
+      tables.map((table) => table.name).sort()
+    );
   });
 
   test("is recorded in the release manifest and stays a free, non-transactable listing", () => {

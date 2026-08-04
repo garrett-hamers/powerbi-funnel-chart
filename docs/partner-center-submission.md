@@ -146,7 +146,10 @@ samples/atlyn-funnel-sample/
 │   └── CustomVisuals/atlynFunnelA1B2C3D4/  -> the built .pbiviz, unzipped
 └── AtlynFunnelSample.SemanticModel/
     ├── definition.pbism
-    └── model.bim                           -> inline #table literals only
+    └── definition/                         -> TMDL
+        ├── database.tmdl
+        ├── model.tmdl
+        └── tables/*.tmdl                   -> DAX calculated tables
 ```
 
 Two properties make it genuinely offline:
@@ -156,10 +159,17 @@ Two properties make it genuinely offline:
   `atlynFunnelA1B2C3D4.pbiviz.json`, and the unzipped contents of the built
   `.pbiviz` live under `CustomVisuals/atlynFunnelA1B2C3D4/`. `publicCustomVisuals` is
   deliberately **not** used, because that resolves the visual from the AppSource store.
-- **The data is inline.** Every table partition is an M `#table(...)` literal generated
-  from the tracked CSVs. There is no `Sql.Database`, `Web.Contents`, `File.Contents`,
-  `Csv.Document`, or URL anywhere in the model, so a refresh needs no credentials, no
-  files on disk, and no network.
+- **The model has no data source at all.** Both tables are DAX *calculated tables* whose
+  partitions are inline `DATATABLE(...)` literals generated from the tracked CSVs. There
+  is no Power Query partition, no data source object, and no connector or URL anywhere in
+  the semantic model, so opening the project never prompts for credentials and there is
+  nothing to refresh against. A blank stage is expressed as `BLANK()`, which
+  [`DATATABLE` documents as a valid value](https://learn.microsoft.com/en-us/dax/datatable-function-dax).
+
+No third-party tooling is involved. In particular **`pbi-tools` is not used and is not
+required** — `pbi-tools compile` is broken against current Power BI Desktop packaging
+APIs, and this project is produced by a dependency-free Node script and opened natively
+by Desktop.
 
 ### Converting to `.pbix` — OWNER ACTION REQUIRED
 
@@ -178,6 +188,11 @@ The generated project is validated against Microsoft's published JSON schemas an
 repository's own gates, but **it has not been opened in Power BI Desktop from this
 repository** — no Desktop and no headless validator is available here. If Desktop reports
 a problem with any file, that is the place to fix it.
+
+Format versions are the ones Microsoft's own published projects use:
+`definition.pbir` `4.0` and `definition.pbism` `4.0`, which are what permit the PBIR
+`definition\` folder and the TMDL `definition\` folder respectively. Version `1.0` on
+either file means the legacy single-file format instead.
 
 The underlying data is also still available as plain CSV for anyone who prefers to
 rebuild the report by hand:

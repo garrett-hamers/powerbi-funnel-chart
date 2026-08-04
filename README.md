@@ -91,9 +91,11 @@ npm run package
 npm run sample-report
 ```
 
-It is a PBIR-format report plus a TMSL semantic model. The visual is embedded from the
-built `.pbiviz` through `resourcePackages` rather than `publicCustomVisuals`, and every
-table partition is an inline M `#table(...)` literal, so the project opens and refreshes
-with no credentials and no network. Turning it into the required `.pbix` is a one-time
-**File → Save as** in Power BI Desktop; `docs/partner-center-submission.md` records that
-step and every other remaining manual action.
+It is a PBIR-format report plus a TMDL semantic model. The visual is embedded from the
+built `.pbiviz` through `resourcePackages` rather than `publicCustomVisuals`, and both
+tables are DAX calculated tables built from inline `DATATABLE(...)` literals — the model
+declares **no data source at all**, so the project opens with no credential prompt and
+nothing to refresh. No third-party tooling is used or required. Turning it into the
+required `.pbix` is a one-time **File → Save as** in Power BI Desktop;
+`docs/partner-center-submission.md` records that step and every other remaining manual
+action.

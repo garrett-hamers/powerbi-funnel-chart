@@ -1,0 +1,73 @@
+table 'Funnel stages'
+	lineageTag: 191d130c-06f1-8a1f-324e-e1517b359358
+
+	column 'Stage'
+		lineageTag: 6e6226f5-6d78-89c2-a384-87481715cee0
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Stage]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'StageOrder'
+		formatString: 0
+		lineageTag: 084a7de3-617f-a36e-b8b3-ae222275c1c4
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [StageOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Segment'
+		lineageTag: f8e361d3-5c2e-1d91-c2d9-9f1fbc0b4cab
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Segment]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Value'
+		formatString: 0
+		lineageTag: 57d3f7e8-ec87-a5fa-f5f4-8642cfa5c5df
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Target'
+		formatString: 0
+		lineageTag: 0a0aa643-49f7-6f75-0c7e-44310be625fd
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Target]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Funnel stages' = calculated
+		mode: import
+		source = ```
+				DATATABLE(
+				    "Stage", STRING,
+				    "StageOrder", INTEGER,
+				    "Segment", STRING,
+				    "Value", INTEGER,
+				    "Target", INTEGER,
+				    {
+				        {"Website visits", 1, "North America", 68400, 64000},
+				        {"Website visits", 1, "EMEA", 60000, 56000},
+				        {"Product tour", 2, "North America", 39800, 41000},
+				        {"Product tour", 2, "EMEA", 35100, 37000},
+				        {"Free trial started", 3, "North America", 16950, 18000},
+				        {"Free trial started", 3, "EMEA", 14300, 16000},
+				        {"Qualified demo", 4, "North America", 7220, 7000},
+				        {"Qualified demo", 4, "EMEA", 5660, 5000},
+				        {"Proposal sent", 5, "North America", 3540, 3700},
+				        {"Proposal sent", 5, "EMEA", 2700, 2800},
+				        {"Closed won", 6, "North America", 1690, 1800},
+				        {"Closed won", 6, "EMEA", 1170, 1200}
+				    }
+				)
+				
+				```
+

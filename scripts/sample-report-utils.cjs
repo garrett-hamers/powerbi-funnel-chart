@@ -85,7 +85,8 @@ const inspectProject = (projectDirectory, options, result) => {
     `${reportFolder}/definition/report.json`,
     `${reportFolder}/definition/pages/pages.json`,
     `${modelFolder}/definition.pbism`,
-    `${modelFolder}/model.bim`
+    `${modelFolder}/definition/database.tmdl`,
+    `${modelFolder}/definition/model.tmdl`
   ];
   if (guid) {
     required.push(
@@ -178,33 +179,69 @@ const inspectProject = (projectDirectory, options, result) => {
       });
     });
 
-  const model = readJson(absolute(`${modelFolder}/model.bim`));
-  result.model = model;
-  const tables = model.model?.tables ?? [];
-  if (tables.length === 0) {
-    issues.push("model.bim must define at least one table");
+  const pbism = readJson(absolute(`${modelFolder}/definition.pbism`));
+  if (!/^4\./.test(String(pbism.version ?? ""))) {
+    issues.push(
+      `definition.pbism declares version ${pbism.version}; the TMDL definition folder requires 4.0 or above`
+    );
   }
-  tables.forEach((table) => {
-    (table.partitions ?? []).forEach((partition) => {
-      if (partition.source?.type !== "m") {
-        issues.push(`model.bim partition ${table.name} must use an inline M source`);
-        return;
+
+  const modelDefinitionPrefix = `${modelFolder}/definition/`;
+  const modelDefinitionFiles = result.files.filter((file) => file.startsWith(modelDefinitionPrefix));
+  const tableFiles = modelDefinitionFiles.filter(
+    (file) => file.startsWith(`${modelDefinitionPrefix}tables/`) && file.endsWith(".tmdl")
+  );
+  result.model = { pbismVersion: pbism.version, tables: [] };
+  if (tableFiles.length === 0) {
+    issues.push("the semantic model must define at least one TMDL table");
+  }
+  if (modelDefinitionFiles.includes(`${modelDefinitionPrefix}expressions.tmdl`)) {
+    issues.push("the semantic model must not declare shared expressions or parameters");
+  }
+
+  modelDefinitionFiles.forEach((file) => {
+    const contents = fs.readFileSync(absolute(file), "utf8");
+    EXTERNAL_SOURCE_PATTERNS.forEach((pattern) => {
+      if (pattern.test(contents)) {
+        issues.push(`${file} references an external data source (${pattern})`);
       }
-      const expression = Array.isArray(partition.source.expression)
-        ? partition.source.expression.join("\n")
-        : String(partition.source.expression ?? "");
-      if (!expression.includes("#table(")) {
-        issues.push(`model.bim partition ${table.name} must build its rows from an inline #table literal`);
-      }
-      EXTERNAL_SOURCE_PATTERNS.forEach((pattern) => {
-        if (pattern.test(expression)) {
-          issues.push(`model.bim partition ${table.name} references an external data source (${pattern})`);
-        }
-      });
     });
+    if (/\bdataSource\b/.test(contents)) {
+      issues.push(`${file} declares a data source; the sample model must have none`);
+    }
   });
-  if ((model.model?.dataSources ?? []).length > 0 || (model.model?.expressions ?? []).length > 0) {
-    issues.push("model.bim must not declare shared data sources or parameters");
+
+  tableFiles.forEach((file) => {
+    const contents = fs.readFileSync(absolute(file), "utf8");
+    const name = file.slice(`${modelDefinitionPrefix}tables/`.length).replace(/\.tmdl$/, "");
+    result.model.tables.push({ name, file, contents });
+    if (!/^\s*partition .+ = calculated\s*$/m.test(contents)) {
+      issues.push(`${file} must define a DAX calculated-table partition`);
+    }
+    if (!contents.includes("DATATABLE(")) {
+      issues.push(`${file} must build its rows from an inline DATATABLE literal`);
+    }
+    if (/=\s*m\s*$/m.test(contents) || /\bsource\s*=\s*```?\s*$[\s\S]{0,40}\blet\b/m.test(contents)) {
+      issues.push(`${file} must not use a Power Query partition; the sample model has no data source`);
+    }
+  });
+
+  const modelTmdl = fs.readFileSync(absolute(`${modelFolder}/definition/model.tmdl`), "utf8");
+  const referenced = [...modelTmdl.matchAll(/^ref table '?([^'\n]+?)'?\s*$/gm)].map((match) => match[1]);
+  result.model.referencedTables = referenced;
+  referenced.forEach((name) => {
+    if (!result.model.tables.some((table) => table.name === name)) {
+      issues.push(`model.tmdl references table "${name}" but definition/tables/${name}.tmdl is missing`);
+    }
+  });
+  result.model.tables.forEach((table) => {
+    if (!referenced.includes(table.name)) {
+      issues.push(`definition/tables/${table.name}.tmdl is not referenced by model.tmdl`);
+    }
+  });
+  const database = fs.readFileSync(absolute(`${modelFolder}/definition/database.tmdl`), "utf8");
+  if (!/^\s*compatibilityLevel:\s*\d+\s*$/m.test(database)) {
+    issues.push("database.tmdl must declare a compatibility level");
   }
 
   if (guid) {

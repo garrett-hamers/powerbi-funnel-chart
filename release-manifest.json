@@ -18,7 +18,7 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "8e51d4cddbcd040e8b2ddd7ddab7bd39eafd7a27",
+  "sourceCommit": "55c641c9bcd7901f444f32ce68ac10b995d72d75",
   "packageVersion": "1.0.0",
   "privileges": [],
   "externalJS": [],
@@ -64,15 +64,15 @@
     },
     "submissionDossier": {
       "path": "docs/partner-center-submission.md",
-      "bytes": 12950,
-      "sha256": "0f49b45826439974bb7c804e00a85f9588bfcf01f0928d8c7da138c985bf3184"
+      "bytes": 13883,
+      "sha256": "7b6b2cc57b8cd6eb48b6c8c34781b4b02356cc6d7f944d3c05889157006a6dd5"
     },
     "sampleReportProject": {
       "path": "samples/atlyn-funnel-sample",
       "format": "pbip",
-      "files": 15,
-      "bytes": 184546,
-      "sha256": "dce82811a6afcf20cd0fe38212616c79312b46990cf92741835f930b1d87f1f9"
+      "files": 18,
+      "bytes": 182028,
+      "sha256": "04f570a9c97392f996de331592db4511efbcb017ab241b60094416db9d9c99f5"
     }
   },
   "publication": {
