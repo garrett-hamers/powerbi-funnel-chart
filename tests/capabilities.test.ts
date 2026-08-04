@@ -19,7 +19,7 @@ describe("certification-first package metadata", () => {
     expect(pbiviz.visual.name).toBe("atlynFunnel");
     expect(pbiviz.visual.supportUrl).toBe("https://atlyn.io/contact");
     expect(pbiviz.visual.gitHubUrl).toBe("https://github.com/garrett-hamers/powerbi-funnel-chart");
-    expect(pbiviz.assets.icon).toBe("assets/icon.svg");
+    expect(pbiviz.assets.icon).toBe("assets/icon.png");
     expect(pbiviz.author).toEqual({
       name: "Atlyn",
       email: "atlyn.help@gmail.com"

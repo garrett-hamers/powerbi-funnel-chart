@@ -9,8 +9,8 @@
   },
   "package": {
     "filename": "atlynFunnelA1B2C3D4.1.0.0.0.pbiviz",
-    "sha256": "771af7eb6aa03f20e9563ec768e4f7b0dbf28626a6c93156cf945bf27a826c8c",
-    "bytes": 49081
+    "sha256": "93135efed3bf2261634b55da919f022b472246a321f9c5c8971f53c3fcee5b8a",
+    "bytes": 49119
   },
   "reproducible": true,
   "zipNormalization": {
@@ -18,11 +18,19 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "55c641c9bcd7901f444f32ce68ac10b995d72d75",
+  "sourceCommit": "c75ca3cf494ba7bdab4b64617bd1d929906d7f19",
   "packageVersion": "1.0.0",
   "privileges": [],
   "externalJS": [],
   "publicationAssets": {
+    "visualIcon20x20": {
+      "path": "assets/icon.png",
+      "format": "png",
+      "width": 20,
+      "height": 20,
+      "bytes": 241,
+      "sha256": "7e7d1fd5235a883e3ea24c12ceb0b0aab8b51366b696b5690f76724bb9b0abb9"
+    },
     "partnerCenterLogo300x300": {
       "path": "assets/logo-300x300.png",
       "format": "png",
@@ -64,15 +72,15 @@
     },
     "submissionDossier": {
       "path": "docs/partner-center-submission.md",
-      "bytes": 13883,
-      "sha256": "7b6b2cc57b8cd6eb48b6c8c34781b4b02356cc6d7f944d3c05889157006a6dd5"
+      "bytes": 14711,
+      "sha256": "6c12f765ad7027fa9c30b4766b188ace6e420490320dcb6623fe660d336be2e3"
     },
     "sampleReportProject": {
       "path": "samples/atlyn-funnel-sample",
       "format": "pbip",
       "files": 18,
-      "bytes": 182028,
-      "sha256": "04f570a9c97392f996de331592db4511efbcb017ab241b60094416db9d9c99f5"
+      "bytes": 182044,
+      "sha256": "47ab036931d7b6e3f564457a63cfdc763aa332e0957a803cdfe8bc3cdd847bdf"
     }
   },
   "publication": {

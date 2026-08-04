@@ -22,6 +22,7 @@ const packageJson = readJson("package.json");
 const publication = readJson("publication.json");
 const visual = pbiviz.visual;
 const publicationLogoPath = path.join(root, "assets", "logo-300x300.png");
+const visualIconPath = path.join(root, "assets", "icon.png");
 
 if (!visual?.name || !visual.guid || !visual.version) {
   fail("pbiviz.json must declare a visual name, GUID, and version");
@@ -32,8 +33,8 @@ if (!Array.isArray(capabilities.privileges) || capabilities.privileges.length !=
 if (!Array.isArray(pbiviz.externalJS) || pbiviz.externalJS.length !== 0) {
   fail("pbiviz.json externalJS must be []");
 }
-if (pbiviz.assets?.icon !== "assets/icon.svg") {
-  fail("pbiviz.json assets.icon must be assets/icon.svg");
+if (pbiviz.assets?.icon !== "assets/icon.png") {
+  fail("pbiviz.json assets.icon must be assets/icon.png");
 }
 if (publication.assets?.logo !== "assets/logo-300x300.png") {
   fail("publication.json must declare assets/logo-300x300.png as the Partner Center logo");
@@ -52,6 +53,25 @@ if (
   publicationLogo.height !== publication.constraints.logo.height
 ) {
   fail("assets/logo-300x300.png must be exactly 300x300 pixels");
+}
+
+if (publication.assets?.icon !== "assets/icon.png") {
+  fail("publication.json must declare assets/icon.png as the visual icon");
+}
+if (!fs.existsSync(visualIconPath)) {
+  fail("assets/icon.png must exist; run `npm run icons`");
+}
+let visualIcon;
+try {
+  visualIcon = readPngContentProfile(visualIconPath);
+} catch (error) {
+  fail(`unable to read assets/icon.png metadata: ${error.message}`);
+}
+if (
+  visualIcon.width !== publication.constraints.icon.width ||
+  visualIcon.height !== publication.constraints.icon.height
+) {
+  fail("assets/icon.png must be exactly 20x20 pixels");
 }
 
 const screenshotPaths = publication.assets?.screenshots ?? [];
@@ -175,6 +195,14 @@ const manifest = {
   privileges: capabilities.privileges,
   externalJS: pbiviz.externalJS,
   publicationAssets: {
+    visualIcon20x20: {
+      path: "assets/icon.png",
+      format: "png",
+      width: visualIcon.width,
+      height: visualIcon.height,
+      bytes: visualIcon.bytes,
+      sha256: visualIcon.sha256
+    },
     partnerCenterLogo300x300: {
       path: "assets/logo-300x300.png",
       format: "png",

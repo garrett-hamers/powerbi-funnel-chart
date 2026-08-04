@@ -58,12 +58,17 @@ anything drifts from what is on disk.
 
 | Asset | Path |
 | --- | --- |
+| Visual icon (20x20 PNG) | `assets/icon.png`, generated from `assets/icon.svg` by `npm run icons` |
 | Logo (300x300 PNG) | `assets/logo-300x300.png` |
 | Screenshots (1366x768 PNG, ≤ 1024 KB) | `assets/screenshots/` |
 | EULA | `EULA.md` |
 | Submission dossier | `docs/partner-center-submission.md` |
 | Offline sample report project (PBIP) | `samples/atlyn-funnel-sample/` |
 | Offline sample data | `assets/sample-data/` |
+
+The three image sizes are independently mandated and independently checked: the visual
+icon is exactly 20x20, the listing logo exactly 300x300, and every screenshot exactly
+1366x768 within a 1024 KB budget.
 
 The screenshots are real renders of the built bundle, regenerated with:
 

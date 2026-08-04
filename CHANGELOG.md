@@ -4,6 +4,17 @@ All notable changes to Atlyn Funnel are documented here.
 
 ## Unreleased
 
+- Replaced the SVG visual icon with a real 20x20 `assets/icon.png`, generated from the
+  tracked `assets/icon.svg` by `npm run icons`. The packaging plugin hardcodes
+  `assets/icon.png` into the packaged manifest while base64-encoding whatever
+  `assets.icon` points at, so the previous SVG produced a package that declared a PNG and
+  embedded an `image/svg+xml` data URI. **This changes the packaged `.pbiviz` SHA-256**,
+  so the storefront artifact must be re-published deliberately. The visual GUID and
+  version are unchanged.
+- The certification audit now checks the three published image sizes independently:
+  `assets/icon.png` exactly 20x20, `assets/logo-300x300.png` exactly 300x300, and every
+  screenshot exactly 1366x768 within 1024 KB.
+
 - Normalized the published identity to the Atlyn brand: `author.name` is `Atlyn`,
   `author.email` is `atlyn.help@gmail.com`, and `visual.supportUrl` points at
   <https://atlyn.io/contact>. The visual GUID and version are unchanged.

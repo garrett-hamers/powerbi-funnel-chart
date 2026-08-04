@@ -48,7 +48,7 @@ requireCondition(Array.isArray(capabilities.privileges) && capabilities.privileg
 requireCondition(pbiviz.visual?.guid === "atlynFunnelA1B2C3D4", "pbiviz.json must preserve the stable visual GUID");
 requireCondition(Number.parseFloat(pbiviz.apiVersion) >= 5.1, "pbiviz.json must use Power BI API 5.1 or newer");
 requireCondition(Array.isArray(pbiviz.externalJS) && pbiviz.externalJS.length === 0, "pbiviz.json externalJS must be []");
-requireCondition(pbiviz.assets?.icon === "assets/icon.svg", "pbiviz.json assets.icon must be assets/icon.svg");
+requireCondition(pbiviz.assets?.icon === "assets/icon.png", "pbiviz.json assets.icon must be a 20x20 assets/icon.png");
 requireCondition(packageJson.scripts?.eslint === "npx eslint . --ext .js,.jsx,.ts,.tsx", "the exact full ESLint script is required");
 requireCondition(packageJson.scripts?.audit === "npm audit", "the audit script must run the full audit");
 requireCondition(typeof packageJson.devDependencies?.typescript === "string", "TypeScript must be a direct development dependency");
@@ -73,6 +73,48 @@ requireCondition(manifest.reproducible === true, "release manifest must require 
 requireCondition(manifest.zipNormalization?.entryTimestamp === "1980-01-01T00:00:00.000Z", "release manifest must record fixed ZIP entry timestamps");
 requireCondition(manifest.zipNormalization?.compression === "DEFLATE" && manifest.zipNormalization?.compressionLevel === 9, "release manifest must record fixed ZIP compression");
 requireCondition(manifest.sourceCommit === currentCommit || typeof manifest.sourceCommit === "string", "release manifest must record a source commit");
+/*
+ * The three published image assets have three different, independently mandated sizes:
+ * the visual icon is 20x20, the Partner Center logo is 300x300, and every listing
+ * screenshot is 1366x768. Each is checked separately so a failure names the right asset.
+ */
+const visualIconPath = path.join(root, "assets", "icon.png");
+const iconRules = publication.constraints?.icon ?? { width: 20, height: 20 };
+try {
+  const icon = readPngContentProfile(visualIconPath);
+  requireCondition(
+    icon.width === iconRules.width && icon.height === iconRules.height,
+    `assets/icon.png must be exactly ${iconRules.width}x${iconRules.height}`
+  );
+  requireCondition(
+    icon.distinctColors >= 8 && icon.opaqueRatio > 0.01,
+    "assets/icon.png must contain real artwork rather than a placeholder fill"
+  );
+  requireCondition(
+    publication.assets?.icon === "assets/icon.png",
+    "publication.json must declare assets/icon.png as the visual icon"
+  );
+  requireCondition(
+    manifest.publicationAssets?.visualIcon20x20?.path === "assets/icon.png",
+    "release manifest must include visualIcon20x20 metadata"
+  );
+  requireCondition(
+    manifest.publicationAssets?.visualIcon20x20?.sha256 === icon.sha256,
+    "release manifest icon SHA-256 does not match assets/icon.png"
+  );
+  requireCondition(
+    manifest.publicationAssets?.visualIcon20x20?.bytes === icon.bytes,
+    "release manifest icon byte size does not match assets/icon.png"
+  );
+  requireCondition(
+    manifest.publicationAssets?.visualIcon20x20?.width === icon.width &&
+      manifest.publicationAssets?.visualIcon20x20?.height === icon.height,
+    "release manifest icon dimensions do not match assets/icon.png"
+  );
+} catch (error) {
+  failures.push(`unable to validate assets/icon.png: ${error.message}`);
+}
+
 const publicationLogoPath = path.join(root, "assets", "logo-300x300.png");
 try {
   const logo = readPngContentProfile(publicationLogoPath);
@@ -232,6 +274,10 @@ requireTrackedDocument(
 requireCondition(
   packageJson.scripts?.screenshots === "node scripts/capture-screenshots.cjs",
   "the screenshot capture script must stay wired into npm scripts"
+);
+requireCondition(
+  packageJson.scripts?.icons === "node scripts/build-icons.cjs",
+  "the icon generator must stay wired into npm scripts"
 );
 requireCondition(
   packageJson.scripts?.["sample-report"] === "node scripts/build-sample-report.cjs",

@@ -23,6 +23,7 @@ certified, or published.** This dossier describes readiness only.
 | Author name | `Atlyn` | `pbiviz.json` → `author.name` |
 | Author email | `atlyn.help@gmail.com` | `pbiviz.json` → `author.email` |
 | API version | `5.11.0` | `pbiviz.json` → `apiVersion` |
+| Visual icon | `assets/icon.png`, exactly 20x20 | `pbiviz.json` → `assets.icon` |
 | Privileges | `[]` (no network, no downloads, no local storage) | `capabilities.json` → `privileges` |
 
 The GUID is stable and must never change: it is already referenced by the Atlyn
@@ -89,14 +90,27 @@ transmits your data anywhere.
 
 | Asset | Requirement | File | Actual |
 | --- | --- | --- | --- |
+| Visual icon | PNG, exactly 20x20 | `assets/icon.png` | 20x20 PNG, 241 bytes |
 | Logo | PNG, exactly 300x300 | `assets/logo-300x300.png` | 300x300 PNG, 3,336 bytes |
 | Screenshot 1 | PNG, exactly 1366x768, ≤ 1024 KB | `assets/screenshots/01-conversion-funnel.png` | 1366x768 PNG, 48,128 bytes |
 | Screenshot 2 | PNG, exactly 1366x768, ≤ 1024 KB | `assets/screenshots/02-segment-comparison.png` | 1366x768 PNG, 66,841 bytes |
 | Screenshot 3 | PNG, exactly 1366x768, ≤ 1024 KB | `assets/screenshots/03-diagnostics.png` | 1366x768 PNG, 51,599 bytes |
 
+These are three separate, independently mandated sizes and the audit checks each one on
+its own: the visual icon shown in the visualization pane is 20x20, the Partner Center
+listing logo is 300x300, and every listing screenshot is 1366x768.
+
 Exact byte sizes and SHA-256 hashes are regenerated into `release-manifest.json` →
 `publicationAssets` by `npm run release-manifest`, and re-verified by
 `npm run certification-audit`.
+
+### How the visual icon is produced
+
+`assets/icon.svg` remains the tracked source of the mark. `npm run icons`
+(`scripts/build-icons.cjs`) parses its path, rasterises it at 20x20 with 16x16
+supersampling, and encodes the PNG with `node:zlib` — no browser and no image library, so
+the bytes are identical on every machine. The command refuses to write anything that is
+not exactly 20x20 with real, non-uniform content.
 
 ### How the screenshots were produced
 

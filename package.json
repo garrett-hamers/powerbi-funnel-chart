@@ -11,6 +11,7 @@
     "test": "jest --runInBand",
     "package": "node scripts/package.cjs",
     "screenshots": "node scripts/capture-screenshots.cjs",
+    "icons": "node scripts/build-icons.cjs",
     "sample-report": "node scripts/build-sample-report.cjs",
     "release-manifest": "node scripts/release-manifest.cjs",
     "certification-audit": "node scripts/certification-audit.cjs",

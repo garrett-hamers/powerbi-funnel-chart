@@ -27,12 +27,15 @@ interface PublicationConfig {
   assets: {
     eula: string;
     dossier: string;
+    icon: string;
     logo: string;
+    sampleReportProject: string;
     screenshots: string[];
     sampleData: string[];
   };
   sampleReport: { required: boolean; provided: boolean; reason: string };
   constraints: {
+    icon: { width: number; height: number };
     logo: { width: number; height: number };
     screenshot: {
       width: number;
@@ -59,6 +62,7 @@ interface TrackedImage extends TrackedFile {
 
 interface ReleaseManifest {
   publicationAssets: {
+    visualIcon20x20: TrackedImage;
     partnerCenterLogo300x300: TrackedImage;
     partnerCenterScreenshots1366x768: TrackedImage[];
     eula: TrackedFile;
@@ -136,6 +140,25 @@ describe("AppSource submission metadata", () => {
 });
 
 describe("Partner Center media assets", () => {
+  test("the visual icon is a real 20x20 PNG, not the 300x300 logo", () => {
+    const icon = readPngContentProfile(publication.assets.icon);
+    expect(publication.assets.icon).toBe("assets/icon.png");
+    expect(icon.width).toBe(publication.constraints.icon.width);
+    expect(icon.height).toBe(publication.constraints.icon.height);
+    expect(icon.width).toBe(20);
+    expect(icon.height).toBe(20);
+    expect(icon.distinctColors).toBeGreaterThanOrEqual(8);
+    expect(icon.opaqueRatio).toBeGreaterThan(0.01);
+    expect(manifest.publicationAssets.visualIcon20x20).toEqual({
+      path: "assets/icon.png",
+      format: "png",
+      width: icon.width,
+      height: icon.height,
+      bytes: icon.bytes,
+      sha256: icon.sha256
+    });
+  });
+
   test("the logo is a real 300x300 PNG rather than a placeholder", () => {
     const logo = readPngContentProfile(publication.assets.logo);
     expect(logo.width).toBe(publication.constraints.logo.width);
@@ -186,8 +209,11 @@ describe("Partner Center media assets", () => {
 
   test("the screenshot pipeline stays wired to real renders of the built bundle", () => {
     expect(packageJson.scripts.screenshots).toBe("node scripts/capture-screenshots.cjs");
+    expect(packageJson.scripts.icons).toBe("node scripts/build-icons.cjs");
     expect(fs.existsSync("scripts/capture-screenshots.cjs")).toBe(true);
     expect(fs.existsSync("scripts/screenshot-harness.cjs")).toBe(true);
+    expect(fs.existsSync("scripts/build-icons.cjs")).toBe(true);
+    expect(fs.existsSync("assets/icon.svg")).toBe(true);
     const harness = fs.readFileSync("scripts/screenshot-harness.cjs", "utf8");
     expect(harness).toContain("dist");
     expect(harness).toContain("attachShadow");
