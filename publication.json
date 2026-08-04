@@ -1,0 +1,47 @@
+{
+  "listing": {
+    "displayName": "Atlyn Funnel",
+    "publisher": "Atlyn",
+    "supportUrl": "https://atlyn.io/contact",
+    "privacyPolicyUrl": "https://atlyn.io/legal/privacy",
+    "termsOfUseUrl": "https://atlyn.io/legal/terms",
+    "supportEmail": "atlyn.help@gmail.com"
+  },
+  "assets": {
+    "eula": "EULA.md",
+    "dossier": "docs/partner-center-submission.md",
+    "logo": "assets/logo-300x300.png",
+    "screenshots": [
+      "assets/screenshots/01-conversion-funnel.png",
+      "assets/screenshots/02-segment-comparison.png",
+      "assets/screenshots/03-diagnostics.png"
+    ],
+    "sampleData": [
+      "assets/sample-data/atlyn-funnel-sample.csv",
+      "assets/sample-data/atlyn-funnel-diagnostics-sample.csv",
+      "assets/sample-data/screenshot-scenarios.json"
+    ]
+  },
+  "sampleReport": {
+    "required": true,
+    "provided": false,
+    "reason": "Partner Center requires a sample .pbix. A .pbix can only be authored in Power BI Desktop, so it is an owner-controlled manual step documented in docs/partner-center-submission.md. It is deliberately not stubbed or generated."
+  },
+  "constraints": {
+    "logo": {
+      "width": 300,
+      "height": 300
+    },
+    "screenshot": {
+      "width": 1366,
+      "height": 768,
+      "maxBytes": 1048576,
+      "minCount": 1,
+      "maxCount": 5
+    },
+    "description": {
+      "minLength": 80,
+      "maxLength": 200
+    }
+  }
+}

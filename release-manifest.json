@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "visual": {
     "name": "atlynFunnel",
     "displayName": "Atlyn Funnel",
@@ -9,8 +9,8 @@
   },
   "package": {
     "filename": "atlynFunnelA1B2C3D4.1.0.0.0.pbiviz",
-    "sha256": "01404785358f31aefe575385b7536e5b3b605ca1295e985abc2617502bec4575",
-    "bytes": 48921
+    "sha256": "771af7eb6aa03f20e9563ec768e4f7b0dbf28626a6c93156cf945bf27a826c8c",
+    "bytes": 49081
   },
   "reproducible": true,
   "zipNormalization": {
@@ -18,7 +18,7 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "b1790cf53b2450ae17fe0c8d3c183ec640d794c2",
+  "sourceCommit": "281f1e0ec3c2e06bced17aa57906338313a433ee",
   "packageVersion": "1.0.0",
   "privileges": [],
   "externalJS": [],
@@ -30,6 +30,60 @@
       "height": 300,
       "bytes": 3336,
       "sha256": "c2b862cd3b1dc97786f1d1a20a18f07629537316018c0bc1f1c3b98da67401fa"
+    },
+    "partnerCenterScreenshots1366x768": [
+      {
+        "path": "assets/screenshots/01-conversion-funnel.png",
+        "format": "png",
+        "width": 1366,
+        "height": 768,
+        "bytes": 48128,
+        "sha256": "7e9b2b9c1762627c95c7cc8a3a19670de56bd52f7fc515d93b2fca60bf1af840"
+      },
+      {
+        "path": "assets/screenshots/02-segment-comparison.png",
+        "format": "png",
+        "width": 1366,
+        "height": 768,
+        "bytes": 66841,
+        "sha256": "a964bbe5397f3b339bc327ef22bbe7ca0db71720ac0396fae3cb0f03fa55125d"
+      },
+      {
+        "path": "assets/screenshots/03-diagnostics.png",
+        "format": "png",
+        "width": 1366,
+        "height": 768,
+        "bytes": 51599,
+        "sha256": "7a0efd31a58505a26e10d2198b7a58fdf37d3b240afdefd5fd203a6b7b58d176"
+      }
+    ],
+    "eula": {
+      "path": "EULA.md",
+      "bytes": 3648,
+      "sha256": "66841c1d437e28f26d25defbaa48a1205148f217beee7033fc6be16bf106c472"
+    },
+    "submissionDossier": {
+      "path": "docs/partner-center-submission.md",
+      "bytes": 9731,
+      "sha256": "649448635084514989c72006e0098e13d53e4b58e3337ac701f66d25326b43ae"
+    }
+  },
+  "publication": {
+    "displayName": "Atlyn Funnel",
+    "publisher": "Atlyn",
+    "author": {
+      "name": "Atlyn",
+      "email": "atlyn.help@gmail.com"
+    },
+    "description": "Analyze any ordered process as a conversion funnel: stage-by-stage conversion, drop-off, absolute loss, and target benchmarks, with built-in data-quality diagnostics and full accessibility.",
+    "supportUrl": "https://atlyn.io/contact",
+    "privacyPolicyUrl": "https://atlyn.io/legal/privacy",
+    "termsOfUseUrl": "https://atlyn.io/legal/terms",
+    "supportEmail": "atlyn.help@gmail.com",
+    "sampleReport": {
+      "required": true,
+      "provided": false,
+      "reason": "Partner Center requires a sample .pbix. A .pbix can only be authored in Power BI Desktop, so it is an owner-controlled manual step documented in docs/partner-center-submission.md. It is deliberately not stubbed or generated."
     }
   }
 }

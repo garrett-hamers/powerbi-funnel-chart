@@ -10,17 +10,19 @@ describe("certification-first package metadata", () => {
         guid: string;
         name: string;
         supportUrl: string;
+        gitHubUrl: string;
       };
       assets: { icon: string };
       author: { name: string; email: string };
     };
     expect(pbiviz.visual.guid).toBe("atlynFunnelA1B2C3D4");
     expect(pbiviz.visual.name).toBe("atlynFunnel");
-    expect(pbiviz.visual.supportUrl).toBe("https://github.com/garrett-hamers/powerbi-funnel-chart");
+    expect(pbiviz.visual.supportUrl).toBe("https://atlyn.io/contact");
+    expect(pbiviz.visual.gitHubUrl).toBe("https://github.com/garrett-hamers/powerbi-funnel-chart");
     expect(pbiviz.assets.icon).toBe("assets/icon.svg");
     expect(pbiviz.author).toEqual({
-      name: "Garrett Hamers",
-      email: "garrett.hamers@gmail.com"
+      name: "Atlyn",
+      email: "atlyn.help@gmail.com"
     });
     expect(capabilities.privileges).toEqual([]);
   });

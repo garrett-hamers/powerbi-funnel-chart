@@ -1,0 +1,7 @@
+# Keep every checkout byte-identical across platforms so the tracked SHA-256 hashes in
+# release-manifest.json stay valid on Windows and Linux alike.
+* text=auto eol=lf
+
+*.png binary
+*.pbiviz binary
+*.svg text eol=lf

@@ -2,6 +2,26 @@
 
 All notable changes to Atlyn Funnel are documented here.
 
+## Unreleased
+
+- Normalized the published identity to the Atlyn brand: `author.name` is `Atlyn`,
+  `author.email` is `atlyn.help@gmail.com`, and `visual.supportUrl` points at
+  <https://atlyn.io/contact>. The visual GUID and version are unchanged.
+- Rewrote `visual.description` into listing-quality copy and gated its length.
+- Added the AppSource media assets: three real 1366x768 renders of the built bundle in
+  `assets/screenshots/`, produced by `npm run screenshots` from an offline mock-host
+  harness, alongside the existing 300x300 logo.
+- Added `EULA.md`, `docs/partner-center-submission.md`, `publication.json`, and the
+  offline sample datasets in `assets/sample-data/`.
+- Extended the release manifest and certification audit to verify the submission assets
+  deterministically: real non-placeholder PNG content, exact logo and screenshot
+  dimensions, the 1024 KB screenshot budget, https listing URLs, and hash parity between
+  the manifest and the tracked files.
+- Pinned `hono` to `^4.12.34` through `overrides` to clear a transitive moderate
+  advisory so the required `npm audit` gate passes again.
+- The Partner Center sample `.pbix` remains an owner-controlled manual step and is
+  deliberately not stubbed.
+
 ## 1.0.0 - 2026-08-01
 
 - Added ordered Stage/Value conversion metrics with optional StageOrder, Target,
