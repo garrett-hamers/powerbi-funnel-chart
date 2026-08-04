@@ -4,13 +4,13 @@
     "name": "atlynFunnel",
     "displayName": "Atlyn Funnel",
     "guid": "atlynFunnelA1B2C3D4",
-    "version": "1.0.0.0",
+    "version": "1.0.1.0",
     "apiVersion": "5.11.0"
   },
   "package": {
-    "filename": "atlynFunnelA1B2C3D4.1.0.0.0.pbiviz",
-    "sha256": "93135efed3bf2261634b55da919f022b472246a321f9c5c8971f53c3fcee5b8a",
-    "bytes": 49119
+    "filename": "atlynFunnelA1B2C3D4.1.0.1.0.pbiviz",
+    "sha256": "bd6da7c1201b319eb3f262b999226c97b109c1e48b1e60369e61f7c4bbda697d",
+    "bytes": 49118
   },
   "reproducible": true,
   "zipNormalization": {
@@ -18,8 +18,8 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "c75ca3cf494ba7bdab4b64617bd1d929906d7f19",
-  "packageVersion": "1.0.0",
+  "sourceCommit": "5a7d0d7f4920891316fe37c5c230dc3d57b3b0f1",
+  "packageVersion": "1.0.1",
   "privileges": [],
   "externalJS": [],
   "publicationAssets": {
@@ -72,15 +72,15 @@
     },
     "submissionDossier": {
       "path": "docs/partner-center-submission.md",
-      "bytes": 14711,
-      "sha256": "6c12f765ad7027fa9c30b4766b188ace6e420490320dcb6623fe660d336be2e3"
+      "bytes": 15208,
+      "sha256": "5a40d5e82626f8a9c4c9139db1b7a27fe2fea38d14e21caecbe42e8da0fe5e59"
     },
     "sampleReportProject": {
       "path": "samples/atlyn-funnel-sample",
       "format": "pbip",
       "files": 18,
       "bytes": 182044,
-      "sha256": "47ab036931d7b6e3f564457a63cfdc763aa332e0957a803cdfe8bc3cdd847bdf"
+      "sha256": "e0068af9e84140ee96844d6c1555c242514a74a9556ee174c6c79cf14a1e5aac"
     }
   },
   "publication": {
