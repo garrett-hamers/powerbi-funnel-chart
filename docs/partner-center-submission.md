@@ -39,12 +39,23 @@ normalised). The SHA-256 of the exact artifact you upload is recorded in
 | --- | --- |
 | Offer name / display name | Atlyn Funnel |
 | Publisher | Atlyn |
+| Pricing | **AppSource listing: Free** — no transactable offer, no plans, no private offers |
 | Support contact email | atlyn.help@gmail.com |
 | Support URL | <https://atlyn.io/contact> |
 | Privacy policy URL | <https://atlyn.io/legal/privacy> |
 | Terms of use URL | <https://atlyn.io/legal/terms> |
 | EULA | `EULA.md` in this repository (upload as the offer's licence terms) |
 | GitHub / source URL | <https://github.com/garrett-hamers/powerbi-funnel-chart> |
+
+**AppSource licensing is separate from the Atlyn subscription.** The visual is listed on
+AppSource free of charge and must be published as a non-transactable offer: do not
+configure plans, pricing, metered billing, or a Microsoft-managed licence. Monetisation
+happens exclusively through the Atlyn storefront subscription (Stripe) at atlyn.io, which
+is billed and enforced outside AppSource and outside this visual. Nothing in the visual
+checks entitlement, calls a licence service, or degrades behaviour for non-subscribers.
+
+`publication.json` pins this as `listing.pricing: "Free"` and
+`listing.transactable: false`, and the certification audit fails if either changes.
 
 All listing URLs live in `publication.json` and are re-emitted into
 `release-manifest.json` → `publication` on every release build, so the manifest and the
@@ -108,41 +119,80 @@ Set `CHROME_PATH` if Chrome, Edge, or Chromium is not in a default install locat
 browser automation package is added to `package.json`, so `npm ci` and `npm audit` in CI
 are unaffected.
 
-## 4. Sample report (`.pbix`) — OWNER ACTION REQUIRED
+## 4. Sample report — built as a PBIP project, one Desktop save from `.pbix`
 
-Microsoft requires a sample `.pbix` that works fully offline with no external
-connections. **This repository does not contain one, and does not fake one.** A `.pbix`
-can only be authored by Power BI Desktop.
+Microsoft requires a sample report that works fully offline with no external
+connections. **This repository does not contain a `.pbix`, and does not fake one.** A
+`.pbix` embeds its data model as a binary Analysis Services backup image, which cannot
+be produced headlessly.
 
-The data needed to build it in a few minutes is committed:
+Instead the repository ships the complete, ready-to-open equivalent as a **Power BI
+Project (PBIP)** at `samples/atlyn-funnel-sample`, regenerated deterministically by
+`npm run sample-report`:
+
+```
+samples/atlyn-funnel-sample/
+├── AtlynFunnelSample.pbip
+├── AtlynFunnelSample.Report/
+│   ├── definition.pbir                     -> byPath reference to the local model
+│   ├── definition/
+│   │   ├── version.json
+│   │   ├── report.json                     -> resourcePackages, CustomVisual
+│   │   └── pages/
+│   │       ├── pages.json
+│   │       ├── conversionFunnel/           -> Stage, Value, Stage order, Target
+│   │       ├── segmentComparison/          -> the above plus Segment in Group
+│   │       └── dataQuality/                -> diagnostics table, no Stage order
+│   └── CustomVisuals/atlynFunnelA1B2C3D4/  -> the built .pbiviz, unzipped
+└── AtlynFunnelSample.SemanticModel/
+    ├── definition.pbism
+    └── model.bim                           -> inline #table literals only
+```
+
+Two properties make it genuinely offline:
+
+- **The visual is embedded, not fetched.** `report.json` declares a
+  `resourcePackages` entry of type `CustomVisual` pointing at
+  `atlynFunnelA1B2C3D4.pbiviz.json`, and the unzipped contents of the built
+  `.pbiviz` live under `CustomVisuals/atlynFunnelA1B2C3D4/`. `publicCustomVisuals` is
+  deliberately **not** used, because that resolves the visual from the AppSource store.
+- **The data is inline.** Every table partition is an M `#table(...)` literal generated
+  from the tracked CSVs. There is no `Sql.Database`, `Web.Contents`, `File.Contents`,
+  `Csv.Document`, or URL anywhere in the model, so a refresh needs no credentials, no
+  files on disk, and no network.
+
+### Converting to `.pbix` — OWNER ACTION REQUIRED
+
+1. In Power BI Desktop, enable two preview features under **File → Options and settings
+   → Options → Preview features**: *Power BI Project (.pbip) save option* and *Store
+   reports using enhanced metadata format (PBIR)*. Restart Desktop.
+2. Open `samples/atlyn-funnel-sample/AtlynFunnelSample.pbip`. The report and its
+   semantic model open together, and the Atlyn Funnel visual loads from the embedded
+   package.
+3. Confirm the three pages render, then check **File → Options and settings → Data
+   source settings** — it should list no external sources at all.
+4. **File → Save as** → `Power BI files (*.pbix)` → save as `Atlyn Funnel sample.pbix`.
+5. Upload that file as the offer's sample report in Partner Center.
+
+The generated project is validated against Microsoft's published JSON schemas and by the
+repository's own gates, but **it has not been opened in Power BI Desktop from this
+repository** — no Desktop and no headless validator is available here. If Desktop reports
+a problem with any file, that is the place to fix it.
+
+The underlying data is also still available as plain CSV for anyone who prefers to
+rebuild the report by hand:
 
 - `assets/sample-data/atlyn-funnel-sample.csv` — six-stage B2B funnel split across two
   segments (North America, EMEA) with `Stage`, `StageOrder`, `Segment`, `Value`,
-  `Target` columns. This is the source of screenshots 1 and 2.
+  `Target`. Source of screenshots 1 and 2 and of the first two report pages.
 - `assets/sample-data/atlyn-funnel-diagnostics-sample.csv` — an unordered funnel with a
-  blank stage and a non-monotonic increase. This is the source of screenshot 3.
-
-Steps:
-
-1. Open Power BI Desktop → **Get data** → **Text/CSV** → import both CSV files. Choose
-   **Import** (not DirectQuery) so the report has no live connection.
-2. Add the Atlyn Funnel visual to the report page (**Insert** → **More visuals** →
-   **Import a visual from a file** → `dist/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz`).
-3. Page 1 — "Conversion funnel": from the first table, put `Stage` in **Stage**,
-   `Value` in **Value**, `StageOrder` in **Stage order**, `Target` in **Target**.
-4. Page 2 — "Segment comparison": same field wells, plus `Segment` in **Group**.
-5. Page 3 — "Data quality": from the diagnostics table, put `Stage` in **Stage** and
-   `Value` in **Value**, leaving **Stage order** empty so the diagnostics panel appears.
-6. Save as `Atlyn Funnel sample.pbix`. Confirm **File → Options and settings → Data
-   source settings** lists only the two local CSV imports and that the report renders
-   with the network disconnected.
-7. Upload that file as the offer's sample report in Partner Center.
+  blank stage and a non-monotonic increase. Source of screenshot 3 and the third page.
 
 ## 5. Remaining owner-controlled steps
 
 These cannot be completed from this repository:
 
-1. **Create the sample `.pbix`** as described in section 4.
+1. **Save the sample `.pbix`** from the shipped PBIP project as described in section 4.
 2. **Partner Center account.** Register or sign in to a Microsoft Partner Center account
    enrolled in the commercial marketplace program, and complete publisher verification
    and the tax/payout profile (required even for a free offer).
@@ -150,7 +200,8 @@ These cannot be completed from this repository:
    **Power BI visual**. Use offer ID `atlyn-funnel`.
 4. **Properties.** Choose the analytics category, then either accept Microsoft's
    standard contract or upload `EULA.md` as custom licence terms. Enter
-   <https://atlyn.io/legal/privacy> as the privacy policy URL.
+   <https://atlyn.io/legal/privacy> as the privacy policy URL. **Keep the offer free and
+   non-transactable** — do not add plans or pricing; see section 2.
 5. **Offer listing.** Paste the name, summary, and description from section 2; upload
    the 300x300 logo and the three 1366x768 screenshots from section 3; enter the support
    URL and support email.
@@ -170,14 +221,17 @@ npm run typecheck
 npm run lint
 npm run build
 npm run package
+npm run sample-report
 npm run release-manifest
 npm run certification-audit
 npm run audit
 ```
 
 `npm run certification-audit` fails if the GUID changes, if the four-part version, the
-description length, the https support URL, or the Atlyn author identity regress, if the
-logo is not a real non-placeholder 300x300 PNG, if a screenshot is missing or is not
-exactly 1366x768 and at most 1024 KB, if the EULA or this dossier is missing or has
-drifted from the recorded hash, or if `release-manifest.json` no longer matches what is
-on disk.
+description length, the https support URL, the free non-transactable listing, or the
+Atlyn author identity regress, if the logo is not a real non-placeholder 300x300 PNG, if
+a screenshot is missing or is not exactly 1366x768 and at most 1024 KB, if the EULA or
+this dossier is missing or has drifted from the recorded hash, if the sample report
+project loses a required part, binds a visual other than `atlynFunnelA1B2C3D4`, binds a
+data role that does not exist in `capabilities.json`, or gains an external data source,
+or if `release-manifest.json` no longer matches what is on disk.

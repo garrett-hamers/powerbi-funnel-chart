@@ -18,7 +18,7 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "281f1e0ec3c2e06bced17aa57906338313a433ee",
+  "sourceCommit": "8e51d4cddbcd040e8b2ddd7ddab7bd39eafd7a27",
   "packageVersion": "1.0.0",
   "privileges": [],
   "externalJS": [],
@@ -64,8 +64,15 @@
     },
     "submissionDossier": {
       "path": "docs/partner-center-submission.md",
-      "bytes": 9731,
-      "sha256": "649448635084514989c72006e0098e13d53e4b58e3337ac701f66d25326b43ae"
+      "bytes": 12950,
+      "sha256": "0f49b45826439974bb7c804e00a85f9588bfcf01f0928d8c7da138c985bf3184"
+    },
+    "sampleReportProject": {
+      "path": "samples/atlyn-funnel-sample",
+      "format": "pbip",
+      "files": 15,
+      "bytes": 184546,
+      "sha256": "dce82811a6afcf20cd0fe38212616c79312b46990cf92741835f930b1d87f1f9"
     }
   },
   "publication": {
@@ -76,6 +83,8 @@
       "email": "atlyn.help@gmail.com"
     },
     "description": "Analyze any ordered process as a conversion funnel: stage-by-stage conversion, drop-off, absolute loss, and target benchmarks, with built-in data-quality diagnostics and full accessibility.",
+    "pricing": "Free",
+    "transactable": false,
     "supportUrl": "https://atlyn.io/contact",
     "privacyPolicyUrl": "https://atlyn.io/legal/privacy",
     "termsOfUseUrl": "https://atlyn.io/legal/terms",
@@ -83,7 +92,9 @@
     "sampleReport": {
       "required": true,
       "provided": false,
-      "reason": "Partner Center requires a sample .pbix. A .pbix can only be authored in Power BI Desktop, so it is an owner-controlled manual step documented in docs/partner-center-submission.md. It is deliberately not stubbed or generated."
+      "projectFormat": "pbip",
+      "projectPath": "samples/atlyn-funnel-sample",
+      "reason": "Partner Center requires a sample .pbix. A .pbix embeds its data model as a binary Analysis Services backup image and cannot be produced headlessly, so this repository ships the equivalent Power BI Project (PBIP) with the visual embedded and all data inlined offline. Converting it to .pbix is a one-time Power BI Desktop save documented in docs/partner-center-submission.md. It is deliberately not stubbed or generated."
     }
   }
 }

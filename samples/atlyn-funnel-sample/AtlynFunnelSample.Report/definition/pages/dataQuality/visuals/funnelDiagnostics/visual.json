@@ -1,0 +1,83 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "funnelDiagnostics",
+  "position": {
+    "x": 16,
+    "y": 16,
+    "z": 0,
+    "height": 688,
+    "width": 1248,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "atlynFunnelA1B2C3D4",
+    "query": {
+      "queryState": {
+        "Stage": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Funnel diagnostics"
+                    }
+                  },
+                  "Property": "Stage"
+                }
+              },
+              "queryRef": "Funnel diagnostics.Stage",
+              "nativeQueryRef": "Stage"
+            }
+          ]
+        },
+        "Value": {
+          "projections": [
+            {
+              "field": {
+                "Aggregation": {
+                  "Expression": {
+                    "Column": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "Funnel diagnostics"
+                        }
+                      },
+                      "Property": "Value"
+                    }
+                  },
+                  "Function": 0
+                }
+              },
+              "queryRef": "Sum(Funnel diagnostics.Value)",
+              "nativeQueryRef": "Sum of Value"
+            }
+          ]
+        }
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Funnel diagnostics'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

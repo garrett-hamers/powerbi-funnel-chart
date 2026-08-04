@@ -4,3 +4,6 @@ dist/
 *.pbiviz
 *.log
 webpack.statistics.prod.html
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+**/.pbi/unappliedChanges.json

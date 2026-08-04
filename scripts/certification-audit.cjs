@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { readPngContentProfile } = require("./png-utils.cjs");
+const { inspectSampleReport } = require("./sample-report-utils.cjs");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) =>
@@ -217,6 +218,8 @@ requireTrackedDocument(
     listing.privacyPolicyUrl,
     listing.supportUrl,
     pbiviz.visual?.guid,
+    publication.assets?.sampleReportProject ?? "samples/atlyn-funnel-sample",
+    "AppSource listing: Free",
     ...screenshotPaths
   ]
 );
@@ -229,6 +232,46 @@ requireTrackedDocument(
 requireCondition(
   packageJson.scripts?.screenshots === "node scripts/capture-screenshots.cjs",
   "the screenshot capture script must stay wired into npm scripts"
+);
+requireCondition(
+  packageJson.scripts?.["sample-report"] === "node scripts/build-sample-report.cjs",
+  "the sample report generator must stay wired into npm scripts"
+);
+
+requireCondition(listing.pricing === "Free", "publication.json must record the free AppSource listing");
+requireCondition(
+  listing.transactable === false,
+  "publication.json must record that no transactable AppSource offer is configured"
+);
+requireCondition(
+  manifest.publication?.pricing === listing.pricing &&
+    manifest.publication?.transactable === listing.transactable,
+  "release manifest pricing does not match publication.json"
+);
+
+const sampleReportPath = publication.assets?.sampleReportProject ?? "samples/atlyn-funnel-sample";
+const sampleReport = inspectSampleReport(path.join(root, sampleReportPath), {
+  guid: pbiviz.visual?.guid,
+  version: pbiviz.visual?.version,
+  dataRoles: (capabilities.dataRoles ?? []).map((role) => role.name)
+});
+sampleReport.issues.forEach((issue) => failures.push(issue));
+requireCondition(
+  sampleReport.visuals.length >= 1,
+  "the sample report must contain at least one Atlyn Funnel visual"
+);
+const recordedSampleReport = manifest.publicationAssets?.sampleReportProject;
+requireCondition(
+  recordedSampleReport?.path === sampleReportPath && recordedSampleReport?.format === "pbip",
+  "release manifest must record the sample report project"
+);
+requireCondition(
+  typeof recordedSampleReport?.sha256 === "string" && /^[a-f0-9]{64}$/.test(recordedSampleReport.sha256),
+  "release manifest must record a sample report content digest"
+);
+requireCondition(
+  recordedSampleReport?.files === sampleReport.files.length,
+  "release manifest sample report file count does not match the tracked project"
 );
 
 if (manifest.sourceCommit && currentCommit && manifest.sourceCommit !== currentCommit) {

@@ -62,6 +62,7 @@ anything drifts from what is on disk.
 | Screenshots (1366x768 PNG, ≤ 1024 KB) | `assets/screenshots/` |
 | EULA | `EULA.md` |
 | Submission dossier | `docs/partner-center-submission.md` |
+| Offline sample report project (PBIP) | `samples/atlyn-funnel-sample/` |
 | Offline sample data | `assets/sample-data/` |
 
 The screenshots are real renders of the built bundle, regenerated with:
@@ -79,6 +80,20 @@ browser at exactly 1366x768. Set `CHROME_PATH` if Chrome, Edge, or Chromium is n
 default install location. No browser automation package is added to `package.json`, so
 `npm ci` and `npm audit` are unaffected.
 
-The Partner Center sample `.pbix` is **not** in this repository: it can only be authored
-in Power BI Desktop. `docs/partner-center-submission.md` records the exact field-well
-mapping and the CSVs to build it from, along with every other remaining manual step.
+The Partner Center sample `.pbix` is **not** in this repository: a `.pbix` embeds its
+data model as a binary Analysis Services backup image and cannot be produced headlessly.
+Instead the equivalent Power BI Project ships at `samples/atlyn-funnel-sample`, generated
+deterministically by:
+
+```powershell
+npm run build
+npm run package
+npm run sample-report
+```
+
+It is a PBIR-format report plus a TMSL semantic model. The visual is embedded from the
+built `.pbiviz` through `resourcePackages` rather than `publicCustomVisuals`, and every
+table partition is an inline M `#table(...)` literal, so the project opens and refreshes
+with no credentials and no network. Turning it into the required `.pbix` is a one-time
+**File → Save as** in Power BI Desktop; `docs/partner-center-submission.md` records that
+step and every other remaining manual action.

@@ -2,6 +2,8 @@
   "listing": {
     "displayName": "Atlyn Funnel",
     "publisher": "Atlyn",
+    "pricing": "Free",
+    "transactable": false,
     "supportUrl": "https://atlyn.io/contact",
     "privacyPolicyUrl": "https://atlyn.io/legal/privacy",
     "termsOfUseUrl": "https://atlyn.io/legal/terms",
@@ -11,6 +13,7 @@
     "eula": "EULA.md",
     "dossier": "docs/partner-center-submission.md",
     "logo": "assets/logo-300x300.png",
+    "sampleReportProject": "samples/atlyn-funnel-sample",
     "screenshots": [
       "assets/screenshots/01-conversion-funnel.png",
       "assets/screenshots/02-segment-comparison.png",
@@ -25,7 +28,9 @@
   "sampleReport": {
     "required": true,
     "provided": false,
-    "reason": "Partner Center requires a sample .pbix. A .pbix can only be authored in Power BI Desktop, so it is an owner-controlled manual step documented in docs/partner-center-submission.md. It is deliberately not stubbed or generated."
+    "projectFormat": "pbip",
+    "projectPath": "samples/atlyn-funnel-sample",
+    "reason": "Partner Center requires a sample .pbix. A .pbix embeds its data model as a binary Analysis Services backup image and cannot be produced headlessly, so this repository ships the equivalent Power BI Project (PBIP) with the visual embedded and all data inlined offline. Converting it to .pbix is a one-time Power BI Desktop save documented in docs/partner-center-submission.md. It is deliberately not stubbed or generated."
   },
   "constraints": {
     "logo": {

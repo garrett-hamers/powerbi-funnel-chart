@@ -99,6 +99,42 @@ const hashFile = (relativePath) => {
   };
 };
 
+const listFiles = (absoluteDirectory, prefix = "") =>
+  fs.readdirSync(absoluteDirectory, { withFileTypes: true })
+    .sort((left, right) => (left.name < right.name ? -1 : 1))
+    .flatMap((entry) => {
+      const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      return entry.isDirectory()
+        ? listFiles(path.join(absoluteDirectory, entry.name), relative)
+        : [relative];
+    });
+
+/*
+ * The sample report is a folder, so it is summarised as one order-independent digest
+ * over every tracked file path and its content hash.
+ */
+const hashProject = (relativePath) => {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) {
+    fail(`${relativePath} is missing; run \`npm run sample-report\` after packaging`);
+  }
+  const files = listFiles(absolutePath);
+  const digest = crypto.createHash("sha256");
+  let bytes = 0;
+  files.forEach((file) => {
+    const contents = fs.readFileSync(path.join(absolutePath, ...file.split("/")));
+    bytes += contents.length;
+    digest.update(`${file}\n${crypto.createHash("sha256").update(contents).digest("hex")}\n`);
+  });
+  return {
+    path: relativePath,
+    format: "pbip",
+    files: files.length,
+    bytes,
+    sha256: digest.digest("hex")
+  };
+};
+
 const expectedFilename = `${visual.guid}.${visual.version}.pbiviz`;
 const artifacts = fs.existsSync(dist)
   ? fs.readdirSync(dist).filter((entry) => entry.endsWith(".pbiviz"))
@@ -149,13 +185,16 @@ const manifest = {
     },
     partnerCenterScreenshots1366x768: screenshots,
     eula: hashFile(publication.assets.eula),
-    submissionDossier: hashFile(publication.assets.dossier)
+    submissionDossier: hashFile(publication.assets.dossier),
+    sampleReportProject: hashProject(publication.assets.sampleReportProject)
   },
   publication: {
     displayName: publication.listing.displayName,
     publisher: publication.listing.publisher,
     author: pbiviz.author,
     description: visual.description,
+    pricing: publication.listing.pricing,
+    transactable: publication.listing.transactable,
     supportUrl: publication.listing.supportUrl,
     privacyPolicyUrl: publication.listing.privacyPolicyUrl,
     termsOfUseUrl: publication.listing.termsOfUseUrl,
