@@ -12,6 +12,16 @@ describe("release manifest gate", () => {
       reproducible: boolean;
       zipNormalization: { entryTimestamp: string; compression: string; compressionLevel: number };
       sourceCommit: string;
+      publicationAssets: {
+        partnerCenterLogo300x300: {
+          path: string;
+          format: string;
+          width: number;
+          height: number;
+          bytes: number;
+          sha256: string;
+        };
+      };
     };
 
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/release-manifest.cjs");
@@ -28,5 +38,15 @@ describe("release manifest gate", () => {
       compressionLevel: 9
     });
     expect(manifest.sourceCommit).toMatch(/^[0-9a-f]{40}$/);
+    expect(manifest.publicationAssets.partnerCenterLogo300x300).toEqual(
+      expect.objectContaining({
+        path: "assets/logo-300x300.png",
+        format: "png",
+        width: 300,
+        height: 300
+      })
+    );
+    expect(manifest.publicationAssets.partnerCenterLogo300x300.bytes).toBeGreaterThan(0);
+    expect(manifest.publicationAssets.partnerCenterLogo300x300.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 });

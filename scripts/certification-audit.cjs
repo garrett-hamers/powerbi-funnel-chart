@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { readPngMetadata } = require("./png-utils.cjs");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) =>
@@ -44,6 +45,7 @@ requireCondition(Array.isArray(capabilities.privileges) && capabilities.privileg
 requireCondition(pbiviz.visual?.guid === "atlynFunnelA1B2C3D4", "pbiviz.json must preserve the stable visual GUID");
 requireCondition(Number.parseFloat(pbiviz.apiVersion) >= 5.1, "pbiviz.json must use Power BI API 5.1 or newer");
 requireCondition(Array.isArray(pbiviz.externalJS) && pbiviz.externalJS.length === 0, "pbiviz.json externalJS must be []");
+requireCondition(pbiviz.assets?.icon === "assets/icon.svg", "pbiviz.json assets.icon must be assets/icon.svg");
 requireCondition(packageJson.scripts?.eslint === "npx eslint . --ext .js,.jsx,.ts,.tsx", "the exact full ESLint script is required");
 requireCondition(packageJson.scripts?.audit === "npm audit", "the audit script must run the full audit");
 requireCondition(typeof packageJson.devDependencies?.typescript === "string", "TypeScript must be a direct development dependency");
@@ -68,6 +70,30 @@ requireCondition(manifest.reproducible === true, "release manifest must require 
 requireCondition(manifest.zipNormalization?.entryTimestamp === "1980-01-01T00:00:00.000Z", "release manifest must record fixed ZIP entry timestamps");
 requireCondition(manifest.zipNormalization?.compression === "DEFLATE" && manifest.zipNormalization?.compressionLevel === 9, "release manifest must record fixed ZIP compression");
 requireCondition(manifest.sourceCommit === currentCommit || typeof manifest.sourceCommit === "string", "release manifest must record a source commit");
+const publicationLogoPath = path.join(root, "assets", "logo-300x300.png");
+try {
+  const logo = readPngMetadata(publicationLogoPath);
+  requireCondition(logo.width === 300 && logo.height === 300, "assets/logo-300x300.png must be exactly 300x300");
+  requireCondition(
+    manifest.publicationAssets?.partnerCenterLogo300x300?.path === "assets/logo-300x300.png",
+    "release manifest must include partnerCenterLogo300x300 metadata"
+  );
+  requireCondition(
+    manifest.publicationAssets?.partnerCenterLogo300x300?.sha256 === logo.sha256,
+    "release manifest logo SHA-256 does not match assets/logo-300x300.png"
+  );
+  requireCondition(
+    manifest.publicationAssets?.partnerCenterLogo300x300?.bytes === logo.bytes,
+    "release manifest logo byte size does not match assets/logo-300x300.png"
+  );
+  requireCondition(
+    manifest.publicationAssets?.partnerCenterLogo300x300?.width === logo.width &&
+      manifest.publicationAssets?.partnerCenterLogo300x300?.height === logo.height,
+    "release manifest logo dimensions do not match assets/logo-300x300.png"
+  );
+} catch (error) {
+  failures.push(`unable to validate assets/logo-300x300.png: ${error.message}`);
+}
 if (manifest.sourceCommit && currentCommit && manifest.sourceCommit !== currentCommit) {
   try {
     require("node:child_process").execFileSync(
