@@ -10,6 +10,9 @@
     "lint": "npm run eslint",
     "test": "jest --runInBand",
     "package": "node scripts/package.cjs",
+    "screenshots": "node scripts/capture-screenshots.cjs",
+    "icons": "node scripts/build-icons.cjs",
+    "sample-report": "node scripts/build-sample-report.cjs",
     "release-manifest": "node scripts/release-manifest.cjs",
     "certification-audit": "node scripts/certification-audit.cjs",
     "audit": "npm audit"
@@ -21,7 +24,8 @@
   "overrides": {
     "sockjs": {
       "uuid": "^11.1.1"
-    }
+    },
+    "hono": "^4.12.34"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

@@ -46,6 +46,61 @@ declares `privileges: []`; the visual uses no network access, external assets, o
 custom download APIs. Certification and real-host validation are not claimed by
 this repository. Packaging normalizes PBIVIZ ZIP entry timestamps and DEFLATE
 settings, so the release-manifest SHA-256 is reproducible from identical source.
-Partner Center publication assets include a tracked deterministic
-`assets/logo-300x300.png` derived from `assets/icon.svg`.
 The full dependency audit and certification audit are required release gates.
+
+## AppSource publication assets
+
+`publication.json` is the single source of truth for the AppSource listing. It names
+the support, privacy, and terms URLs, the tracked media assets, and the Partner Center
+size constraints. `npm run release-manifest` re-emits those facts, with byte sizes and
+SHA-256 hashes, into `release-manifest.json`, and `npm run certification-audit` fails if
+anything drifts from what is on disk.
+
+| Asset | Path |
+| --- | --- |
+| Visual icon (20x20 PNG) | `assets/icon.png`, generated from `assets/icon.svg` by `npm run icons` |
+| Logo (300x300 PNG) | `assets/logo-300x300.png` |
+| Screenshots (1366x768 PNG, ≤ 1024 KB) | `assets/screenshots/` |
+| EULA | `EULA.md` |
+| Submission dossier | `docs/partner-center-submission.md` |
+| Offline sample report project (PBIP) | `samples/atlyn-funnel-sample/` |
+| Offline sample data | `assets/sample-data/` |
+
+The three image sizes are independently mandated and independently checked: the visual
+icon is exactly 20x20, the listing logo exactly 300x300, and every screenshot exactly
+1366x768 within a 1024 KB budget.
+
+The screenshots are real renders of the built bundle, regenerated with:
+
+```powershell
+npm run build
+npm run screenshots
+```
+
+`npm run screenshots` builds one offline harness page per scenario in `.tmp/screenshots`
+— the packaged bundle and stylesheet are inlined, a shadow root reproduces the Power BI
+style boundary, and a mock `IVisualHost` supplies the literal data in
+`assets/sample-data/screenshot-scenarios.json` — then drives a headless Chromium-family
+browser at exactly 1366x768. Set `CHROME_PATH` if Chrome, Edge, or Chromium is not in a
+default install location. No browser automation package is added to `package.json`, so
+`npm ci` and `npm audit` are unaffected.
+
+The Partner Center sample `.pbix` is **not** in this repository: a `.pbix` embeds its
+data model as a binary Analysis Services backup image and cannot be produced headlessly.
+Instead the equivalent Power BI Project ships at `samples/atlyn-funnel-sample`, generated
+deterministically by:
+
+```powershell
+npm run build
+npm run package
+npm run sample-report
+```
+
+It is a PBIR-format report plus a TMDL semantic model. The visual is embedded from the
+built `.pbiviz` through `resourcePackages` rather than `publicCustomVisuals`, and both
+tables are DAX calculated tables built from inline `DATATABLE(...)` literals — the model
+declares **no data source at all**, so the project opens with no credential prompt and
+nothing to refresh. No third-party tooling is used or required. Turning it into the
+required `.pbix` is a one-time **File → Save as** in Power BI Desktop;
+`docs/partner-center-submission.md` records that step and every other remaining manual
+action.

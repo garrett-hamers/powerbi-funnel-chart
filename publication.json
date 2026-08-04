@@ -1,0 +1,57 @@
+{
+  "listing": {
+    "displayName": "Atlyn Funnel",
+    "publisher": "Atlyn",
+    "pricing": "Free",
+    "transactable": false,
+    "supportUrl": "https://atlyn.io/contact",
+    "privacyPolicyUrl": "https://atlyn.io/legal/privacy",
+    "termsOfUseUrl": "https://atlyn.io/legal/terms",
+    "supportEmail": "atlyn.help@gmail.com"
+  },
+  "assets": {
+    "eula": "EULA.md",
+    "dossier": "docs/partner-center-submission.md",
+    "icon": "assets/icon.png",
+    "logo": "assets/logo-300x300.png",
+    "sampleReportProject": "samples/atlyn-funnel-sample",
+    "screenshots": [
+      "assets/screenshots/01-conversion-funnel.png",
+      "assets/screenshots/02-segment-comparison.png",
+      "assets/screenshots/03-diagnostics.png"
+    ],
+    "sampleData": [
+      "assets/sample-data/atlyn-funnel-sample.csv",
+      "assets/sample-data/atlyn-funnel-diagnostics-sample.csv",
+      "assets/sample-data/screenshot-scenarios.json"
+    ]
+  },
+  "sampleReport": {
+    "required": true,
+    "provided": false,
+    "projectFormat": "pbip",
+    "projectPath": "samples/atlyn-funnel-sample",
+    "reason": "Partner Center requires a sample .pbix. A .pbix embeds its data model as a binary Analysis Services backup image and cannot be produced headlessly, so this repository ships the equivalent Power BI Project (PBIP) with the visual embedded and all data inlined offline. Converting it to .pbix is a one-time Power BI Desktop save documented in docs/partner-center-submission.md. It is deliberately not stubbed or generated."
+  },
+  "constraints": {
+    "icon": {
+      "width": 20,
+      "height": 20
+    },
+    "logo": {
+      "width": 300,
+      "height": 300
+    },
+    "screenshot": {
+      "width": 1366,
+      "height": 768,
+      "maxBytes": 1048576,
+      "minCount": 1,
+      "maxCount": 5
+    },
+    "description": {
+      "minLength": 80,
+      "maxLength": 200
+    }
+  }
+}

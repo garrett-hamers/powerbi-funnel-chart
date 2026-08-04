@@ -1,0 +1,38 @@
+table 'Funnel diagnostics'
+	lineageTag: 7ee63c9c-2ccd-df7b-cafc-72a5eb5a4a8a
+
+	column 'Stage'
+		lineageTag: dd1a8c33-0e7e-920e-0f38-d7ab4baffc7f
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Stage]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Value'
+		formatString: 0
+		lineageTag: 18db09ba-d966-462d-16a6-b452e90fba00
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Funnel diagnostics' = calculated
+		mode: import
+		source = ```
+				DATATABLE(
+				    "Stage", STRING,
+				    "Value", INTEGER,
+				    {
+				        {"Site sessions", 84300},
+				        {"Product viewed", 41250},
+				        {"Added to cart", 27150},
+				        {"Checkout started", BLANK()},
+				        {"Payment attempted", 9720},
+				        {"Order completed", 11050}
+				    }
+				)
+				
+				```
+

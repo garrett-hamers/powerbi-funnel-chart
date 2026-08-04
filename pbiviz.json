@@ -5,17 +5,17 @@
     "guid": "atlynFunnelA1B2C3D4",
     "visualClassName": "Visual",
     "version": "1.0.0.0",
-    "description": "Ordered conversion funnel with bottleneck diagnostics",
-    "supportUrl": "https://github.com/garrett-hamers/powerbi-funnel-chart",
+    "description": "Analyze any ordered process as a conversion funnel: stage-by-stage conversion, drop-off, absolute loss, and target benchmarks, with built-in data-quality diagnostics and full accessibility.",
+    "supportUrl": "https://atlyn.io/contact",
     "gitHubUrl": "https://github.com/garrett-hamers/powerbi-funnel-chart"
   },
   "apiVersion": "5.11.0",
   "author": {
-    "name": "Garrett Hamers",
-    "email": "garrett.hamers@gmail.com"
+    "name": "Atlyn",
+    "email": "atlyn.help@gmail.com"
   },
   "assets": {
-    "icon": "assets/icon.svg"
+    "icon": "assets/icon.png"
   },
   "externalJS": [],
   "style": "src/style.css",

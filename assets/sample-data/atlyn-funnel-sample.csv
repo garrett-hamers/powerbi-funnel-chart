@@ -1,0 +1,13 @@
+Stage,StageOrder,Segment,Value,Target
+Website visits,1,North America,68400,64000
+Website visits,1,EMEA,60000,56000
+Product tour,2,North America,39800,41000
+Product tour,2,EMEA,35100,37000
+Free trial started,3,North America,16950,18000
+Free trial started,3,EMEA,14300,16000
+Qualified demo,4,North America,7220,7000
+Qualified demo,4,EMEA,5660,5000
+Proposal sent,5,North America,3540,3700
+Proposal sent,5,EMEA,2700,2800
+Closed won,6,North America,1690,1800
+Closed won,6,EMEA,1170,1200

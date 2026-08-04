@@ -1,0 +1,87 @@
+{
+  "description": "Offline scenario data used to render the Atlyn Funnel AppSource submission screenshots. No external connections; every value is literal.",
+  "offline": true,
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "scenarios": [
+    {
+      "id": "01-conversion-funnel",
+      "title": "Ordered conversion funnel with targets",
+      "source": "assets/sample-data/atlyn-funnel-sample.csv, summed across both segments",
+      "locale": "en-US",
+      "visual": {
+        "width": 1302,
+        "height": 542
+      },
+      "stage": [
+        "Website visits",
+        "Product tour",
+        "Free trial started",
+        "Qualified demo",
+        "Proposal sent",
+        "Closed won"
+      ],
+      "group": null,
+      "stageOrder": [1, 2, 3, 4, 5, 6],
+      "value": [128400, 74900, 31250, 12880, 6240, 2860],
+      "target": [120000, 78000, 34000, 12000, 6500, 3000]
+    },
+    {
+      "id": "02-segment-comparison",
+      "title": "Segment comparison using the Group field",
+      "source": "assets/sample-data/atlyn-funnel-sample.csv, milestone stages only",
+      "locale": "en-US",
+      "visual": {
+        "width": 1302,
+        "height": 712
+      },
+      "stage": [
+        "Website visits",
+        "Free trial started",
+        "Qualified demo",
+        "Closed won",
+        "Website visits",
+        "Free trial started",
+        "Qualified demo",
+        "Closed won"
+      ],
+      "group": [
+        "North America",
+        "North America",
+        "North America",
+        "North America",
+        "EMEA",
+        "EMEA",
+        "EMEA",
+        "EMEA"
+      ],
+      "stageOrder": [1, 3, 4, 6, 1, 3, 4, 6],
+      "value": [68400, 16950, 7220, 1690, 60000, 14300, 5660, 1170],
+      "target": [64000, 18000, 7000, 1800, 56000, 16000, 5000, 1200]
+    },
+    {
+      "id": "03-diagnostics",
+      "title": "Data-quality diagnostics for an unordered, incomplete funnel",
+      "source": "assets/sample-data/atlyn-funnel-diagnostics-sample.csv",
+      "locale": "en-US",
+      "visual": {
+        "width": 1302,
+        "height": 634
+      },
+      "stage": [
+        "Site sessions",
+        "Product viewed",
+        "Added to cart",
+        "Checkout started",
+        "Payment attempted",
+        "Order completed"
+      ],
+      "group": null,
+      "stageOrder": null,
+      "value": [84300, 41250, 27150, null, 9720, 11050],
+      "target": null
+    }
+  ]
+}
