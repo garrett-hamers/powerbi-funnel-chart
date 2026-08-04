@@ -43,8 +43,8 @@ describe("release manifest gate", () => {
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/release-manifest.cjs");
     expect(manifest.schemaVersion).toBe(2);
     expect(manifest.visual.guid).toBe("atlynFunnelA1B2C3D4");
-    expect(manifest.visual.version).toBe("1.0.0.0");
-    expect(manifest.package.filename).toBe("atlynFunnelA1B2C3D4.1.0.0.0.pbiviz");
+    expect(manifest.visual.version).toBe("1.0.1.0");
+    expect(manifest.package.filename).toBe("atlynFunnelA1B2C3D4.1.0.1.0.pbiviz");
     expect(manifest.package.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(manifest.package.bytes).toBeGreaterThan(0);
     expect(manifest.reproducible).toBe(true);

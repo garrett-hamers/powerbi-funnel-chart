@@ -17,7 +17,7 @@ certified, or published.** This dossier describes readiness only.
 | Visual name | `atlynFunnel` | `pbiviz.json` → `visual.name` |
 | Display name | `Atlyn Funnel` | `pbiviz.json` → `visual.displayName` |
 | GUID | `atlynFunnelA1B2C3D4` | `pbiviz.json` → `visual.guid` |
-| Version (four parts) | `1.0.0.0` | `pbiviz.json` → `visual.version` |
+| Version (four parts) | `1.0.1.0` | `pbiviz.json` → `visual.version` |
 | Description | `Analyze any ordered process as a conversion funnel: stage-by-stage conversion, drop-off, absolute loss, and target benchmarks, with built-in data-quality diagnostics and full accessibility.` | `pbiviz.json` → `visual.description` |
 | Support URL | `https://atlyn.io/contact` | `pbiviz.json` → `visual.supportUrl` |
 | Author name | `Atlyn` | `pbiviz.json` → `author.name` |
@@ -29,10 +29,17 @@ certified, or published.** This dossier describes readiness only.
 The GUID is stable and must never change: it is already referenced by the Atlyn
 storefront release manifest and by the published package download path.
 
-Packaged artifact: `dist/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz`, produced by
+Packaged artifact: `dist/atlynFunnelA1B2C3D4.1.0.1.0.pbiviz`, produced by
 `npm run package` and byte-reproducible (ZIP timestamps and DEFLATE level are
 normalised). The SHA-256 of the exact artifact you upload is recorded in
 `release-manifest.json` → `package.sha256`.
+
+Version `1.0.1.0` supersedes `1.0.0.0`. The `1.0.0.0` package that the Atlyn storefront
+already distributes was built before the real 20x20 `assets/icon.png` landed, so its
+bytes differ from anything this repository can rebuild. Rather than re-publish different
+bytes under the same version number, the version was bumped: `1.0.0.0` stays frozen as
+whatever is already published, and every artifact produced from this repository is
+`1.0.1.0` or later. Upload and publish the `1.0.1.0` file only.
 
 ## 2. Offer listing fields
 
@@ -234,7 +241,7 @@ These cannot be completed from this repository:
 5. **Offer listing.** Paste the name, summary, and description from section 2; upload
    the 300x300 logo and the three 1366x768 screenshots from section 3; enter the support
    URL and support email.
-6. **Technical configuration.** Upload `dist/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz` and the
+6. **Technical configuration.** Upload `dist/atlynFunnelA1B2C3D4.1.0.1.0.pbiviz` and the
    sample `.pbix`.
 7. **Submit for review** and respond to validation feedback. Microsoft's review outcome
    is not predictable from this repository, and certification (the separate, stricter

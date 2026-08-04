@@ -2,22 +2,31 @@
 
 All notable changes to Atlyn Funnel are documented here.
 
-## Unreleased
+## 1.0.1.0 - 2026-08-04
 
+- Bumped the visual version from `1.0.0.0` to `1.0.1.0` (`pbiviz.json` →
+  `visual.version`, `package.json` → `version` `1.0.1`). The packaged artifact is now
+  `atlynFunnelA1B2C3D4.1.0.1.0.pbiviz`. **This release supersedes the v1.0.0.0 storefront
+  artifact**: the AppSource submission work replaced the visual icon and reworked
+  `pbiviz.json`, so the package this repository builds no longer matches the bytes already
+  published at the version-keyed path `funnel-chart/1.0.0.0/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz`.
+  Two different files must never share one version number, so `1.0.0.0` is frozen as
+  whatever is already distributed and the storefront should be re-pointed at the
+  `1.0.1.0` artifact. The visual GUID `atlynFunnelA1B2C3D4` is unchanged.
 - Replaced the SVG visual icon with a real 20x20 `assets/icon.png`, generated from the
   tracked `assets/icon.svg` by `npm run icons`. The packaging plugin hardcodes
   `assets/icon.png` into the packaged manifest while base64-encoding whatever
   `assets.icon` points at, so the previous SVG produced a package that declared a PNG and
   embedded an `image/svg+xml` data URI. **This changes the packaged `.pbiviz` SHA-256**,
-  so the storefront artifact must be re-published deliberately. The visual GUID and
-  version are unchanged.
+  which is why this release carries a new version number rather than re-publishing
+  different bytes as `1.0.0.0`. The visual GUID is unchanged.
 - The certification audit now checks the three published image sizes independently:
   `assets/icon.png` exactly 20x20, `assets/logo-300x300.png` exactly 300x300, and every
   screenshot exactly 1366x768 within 1024 KB.
 
 - Normalized the published identity to the Atlyn brand: `author.name` is `Atlyn`,
   `author.email` is `atlyn.help@gmail.com`, and `visual.supportUrl` points at
-  <https://atlyn.io/contact>. The visual GUID and version are unchanged.
+  <https://atlyn.io/contact>. The visual GUID is unchanged.
 - Rewrote `visual.description` into listing-quality copy and gated its length.
 - Added the AppSource media assets: three real 1366x768 renders of the built bundle in
   `assets/screenshots/`, produced by `npm run screenshots` from an offline mock-host

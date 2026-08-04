@@ -1,6 +1,6 @@
 {
   "name": "atlyn-funnel",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Atlyn Funnel Power BI custom visual",
   "scripts": {
