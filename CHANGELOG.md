@@ -20,6 +20,34 @@ All notable changes to Atlyn Funnel are documented here.
   embedded an `image/svg+xml` data URI. **This changes the packaged `.pbiviz` SHA-256**,
   which is why this release carries a new version number rather than re-publishing
   different bytes as `1.0.0.0`. The visual GUID is unchanged.
+- CI now publishes the packaged visual as the `atlyn-funnel-pbiviz` artifact and prints its
+  filename, SHA-256, and byte size to the log and the run summary, so the exact binary that
+  belongs on the storefront is downloadable and its hash is readable from any green run
+  without downloading it. Packaging was already platform-independent, by two mechanisms
+  documented in the dossier: `.gitattributes` normalises every hashed text input to LF, and
+  `scripts/normalize-package.cjs` rebuilds the archive from scratch with JSZip, re-adding
+  every entry — the `resources/` directory entry included — in byte-sorted order with fixed
+  timestamps, permissions, and compression level. The same commit packaged on Windows with
+  Node 24 and on Ubuntu with Node 20 produces identical bytes.
+- Pinned the sample report's PBIR schema versions to what Power BI Desktop actually
+  accepts rather than to the newest versions Microsoft publishes: `report` drops from
+  `3.0.0` to `2.1.0`, joining `page` `2.0.0`, `pagesMetadata` `1.0.0`, and
+  `visualContainer` `2.7.0`. Desktop rejects a report definition newer than the installed
+  build supports, and `3.0.0` had never been opened in Desktop. The `2.1.0` schema also
+  types `themeCollection.baseTheme.reportVersionAtImport` as a version string rather than
+  the `{visual, page, report}` object introduced at `3.0.0`, so the base theme now records
+  `CY23SU04` / `5.46`, the pairing Desktop itself writes. Every generated project file was
+  validated against its declared schema, with remote `$ref`s resolved.
+- Documented a data check before saving the sample `.pbix`. A PBIP caches no data — it
+  stores the model *definition* only — so a project whose tables come from a Power Query
+  `#table(...)` partition opens empty and must be refreshed. These tables are DAX
+  `DATATABLE(...)` calculated tables, which the engine evaluates rather than fetching
+  through Power Query, so Desktop may materialise them on open instead; nobody has opened
+  this project in Desktop, so neither behaviour is claimed. The instruction is therefore a
+  check: confirm the pages render with data, and run **Home → Refresh → Schema and data**
+  only if they do not. What is not optional is the outcome — a `.pbix` saved with empty
+  tables renders no funnel and fails review — so a post-save reopen now verifies it. Added
+  `samples/README.md` and expanded `docs/partner-center-submission.md` §4 accordingly.
 - The certification audit now checks the three published image sizes independently:
   `assets/icon.png` exactly 20x20, `assets/logo-300x300.png` exactly 300x300, and every
   screenshot exactly 1366x768 within 1024 KB.
