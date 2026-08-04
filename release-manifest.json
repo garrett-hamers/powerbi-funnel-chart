@@ -21,5 +21,15 @@
   "sourceCommit": "b1790cf53b2450ae17fe0c8d3c183ec640d794c2",
   "packageVersion": "1.0.0",
   "privileges": [],
-  "externalJS": []
+  "externalJS": [],
+  "publicationAssets": {
+    "partnerCenterLogo300x300": {
+      "path": "assets/logo-300x300.png",
+      "format": "png",
+      "width": 300,
+      "height": 300,
+      "bytes": 3336,
+      "sha256": "c2b862cd3b1dc97786f1d1a20a18f07629537316018c0bc1f1c3b98da67401fa"
+    }
+  }
 }

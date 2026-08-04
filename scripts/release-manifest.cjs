@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { readPngMetadata } = require("./png-utils.cjs");
 
 const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist");
@@ -19,6 +20,7 @@ const pbiviz = readJson("pbiviz.json");
 const capabilities = readJson("capabilities.json");
 const packageJson = readJson("package.json");
 const visual = pbiviz.visual;
+const publicationLogoPath = path.join(root, "assets", "logo-300x300.png");
 
 if (!visual?.name || !visual.guid || !visual.version) {
   fail("pbiviz.json must declare a visual name, GUID, and version");
@@ -28,6 +30,21 @@ if (!Array.isArray(capabilities.privileges) || capabilities.privileges.length !=
 }
 if (!Array.isArray(pbiviz.externalJS) || pbiviz.externalJS.length !== 0) {
   fail("pbiviz.json externalJS must be []");
+}
+if (pbiviz.assets?.icon !== "assets/icon.svg") {
+  fail("pbiviz.json assets.icon must be assets/icon.svg");
+}
+if (!fs.existsSync(publicationLogoPath)) {
+  fail("assets/logo-300x300.png must exist for Partner Center packaging");
+}
+let publicationLogo;
+try {
+  publicationLogo = readPngMetadata(publicationLogoPath);
+} catch (error) {
+  fail(`unable to read assets/logo-300x300.png metadata: ${error.message}`);
+}
+if (publicationLogo.width !== 300 || publicationLogo.height !== 300) {
+  fail("assets/logo-300x300.png must be exactly 300x300 pixels");
 }
 
 const expectedFilename = `${visual.guid}.${visual.version}.pbiviz`;
@@ -68,7 +85,17 @@ const manifest = {
   sourceCommit,
   packageVersion: packageJson.version,
   privileges: capabilities.privileges,
-  externalJS: pbiviz.externalJS
+  externalJS: pbiviz.externalJS,
+  publicationAssets: {
+    partnerCenterLogo300x300: {
+      path: "assets/logo-300x300.png",
+      format: "png",
+      width: publicationLogo.width,
+      height: publicationLogo.height,
+      bytes: publicationLogo.bytes,
+      sha256: publicationLogo.sha256
+    }
+  }
 };
 
 fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

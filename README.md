@@ -46,4 +46,6 @@ declares `privileges: []`; the visual uses no network access, external assets, o
 custom download APIs. Certification and real-host validation are not claimed by
 this repository. Packaging normalizes PBIVIZ ZIP entry timestamps and DEFLATE
 settings, so the release-manifest SHA-256 is reproducible from identical source.
+Partner Center publication assets include a tracked deterministic
+`assets/logo-300x300.png` derived from `assets/icon.svg`.
 The full dependency audit and certification audit are required release gates.

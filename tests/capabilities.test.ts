@@ -11,11 +11,13 @@ describe("certification-first package metadata", () => {
         name: string;
         supportUrl: string;
       };
+      assets: { icon: string };
       author: { name: string; email: string };
     };
     expect(pbiviz.visual.guid).toBe("atlynFunnelA1B2C3D4");
     expect(pbiviz.visual.name).toBe("atlynFunnel");
     expect(pbiviz.visual.supportUrl).toBe("https://github.com/garrett-hamers/powerbi-funnel-chart");
+    expect(pbiviz.assets.icon).toBe("assets/icon.svg");
     expect(pbiviz.author).toEqual({
       name: "Garrett Hamers",
       email: "garrett.hamers@gmail.com"
@@ -79,6 +81,13 @@ describe("certification-first package metadata", () => {
     expect(source).not.toMatch(/\b(fetch|XMLHttpRequest|WebSocket|eval)\b/);
     expect(source).not.toMatch(/\b(innerHTML|outerHTML|insertAdjacentHTML)\b/);
     expect(fs.readFileSync("pbiviz.json", "utf8")).toContain('"externalJS": []');
+  });
+
+  test("tracks a publication-ready 300x300 Partner Center logo asset", () => {
+    const logoBuffer = fs.readFileSync("assets/logo-300x300.png");
+    expect(logoBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true);
+    expect(logoBuffer.readUInt32BE(16)).toBe(300);
+    expect(logoBuffer.readUInt32BE(20)).toBe(300);
   });
 
   test("enforces the certification lint and full audit gates", () => {
