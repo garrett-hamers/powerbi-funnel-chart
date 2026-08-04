@@ -2,22 +2,26 @@
 
 All notable changes to Atlyn Funnel are documented here.
 
-## Unreleased
+## 1.0.1.0 - 2026-08-04
+
+Supersedes the 1.0.0.0 artifact published to Blob storage at
+`funnel-chart/1.0.0.0/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz`
+(SHA-256 `01404785358f31aefe575385b7536e5b3b605ca1295e985abc2617502bec4575`). The packaged
+bytes changed after 1.0.0.0 was published, so the visual is republished under a new
+version rather than shipping different bytes under the same one. 1.0.0.0 was never
+submitted to AppSource. The visual GUID `atlynFunnelA1B2C3D4` is unchanged.
 
 - Replaced the SVG visual icon with a real 20x20 `assets/icon.png`, generated from the
   tracked `assets/icon.svg` by `npm run icons`. The packaging plugin hardcodes
   `assets/icon.png` into the packaged manifest while base64-encoding whatever
   `assets.icon` points at, so the previous SVG produced a package that declared a PNG and
-  embedded an `image/svg+xml` data URI. **This changes the packaged `.pbiviz` SHA-256**,
-  so the storefront artifact must be re-published deliberately. The visual GUID and
-  version are unchanged.
+  embedded an `image/svg+xml` data URI.
 - The certification audit now checks the three published image sizes independently:
   `assets/icon.png` exactly 20x20, `assets/logo-300x300.png` exactly 300x300, and every
   screenshot exactly 1366x768 within 1024 KB.
-
 - Normalized the published identity to the Atlyn brand: `author.name` is `Atlyn`,
   `author.email` is `atlyn.help@gmail.com`, and `visual.supportUrl` points at
-  <https://atlyn.io/contact>. The visual GUID and version are unchanged.
+  <https://atlyn.io/contact>.
 - Rewrote `visual.description` into listing-quality copy and gated its length.
 - Added the AppSource media assets: three real 1366x768 renders of the built bundle in
   `assets/screenshots/`, produced by `npm run screenshots` from an offline mock-host

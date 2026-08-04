@@ -17,7 +17,7 @@ certified, or published.** This dossier describes readiness only.
 | Visual name | `atlynFunnel` | `pbiviz.json` → `visual.name` |
 | Display name | `Atlyn Funnel` | `pbiviz.json` → `visual.displayName` |
 | GUID | `atlynFunnelA1B2C3D4` | `pbiviz.json` → `visual.guid` |
-| Version (four parts) | `1.0.0.0` | `pbiviz.json` → `visual.version` |
+| Version (four parts) | `1.0.1.0` | `pbiviz.json` → `visual.version` |
 | Description | `Analyze any ordered process as a conversion funnel: stage-by-stage conversion, drop-off, absolute loss, and target benchmarks, with built-in data-quality diagnostics and full accessibility.` | `pbiviz.json` → `visual.description` |
 | Support URL | `https://atlyn.io/contact` | `pbiviz.json` → `visual.supportUrl` |
 | Author name | `Atlyn` | `pbiviz.json` → `author.name` |
@@ -29,10 +29,27 @@ certified, or published.** This dossier describes readiness only.
 The GUID is stable and must never change: it is already referenced by the Atlyn
 storefront release manifest and by the published package download path.
 
-Packaged artifact: `dist/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz`, produced by
+Packaged artifact: `dist/atlynFunnelA1B2C3D4.1.0.1.0.pbiviz`, produced by
 `npm run package` and byte-reproducible (ZIP timestamps and DEFLATE level are
 normalised). The SHA-256 of the exact artifact you upload is recorded in
 `release-manifest.json` → `package.sha256`.
+
+### v1.0.1.0 supersedes v1.0.0.0
+
+**Version 1.0.1.0 replaces the 1.0.0.0 artifact currently in Blob storage** at
+`funnel-chart/1.0.0.0/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz`
+(SHA-256 `01404785358f31aefe575385b7536e5b3b605ca1295e985abc2617502bec4575`).
+
+1.0.0.0 was never submitted to AppSource. It is superseded because the packaged bytes
+changed after it was published: the publisher identity moved to Atlyn, the support URL
+moved to <https://atlyn.io/contact>, the description was rewritten, and the visual icon
+became a real 20x20 PNG. Rather than ship different bytes under the same version number,
+the visual is republished as 1.0.1.0.
+
+The storefront must therefore publish the new artifact under a `1.0.1.0/` path and update
+its own release manifest to the new filename, SHA-256, and byte size recorded in this
+repository's `release-manifest.json`. The GUID `atlynFunnelA1B2C3D4` is unchanged, so
+existing report bindings continue to resolve.
 
 ## 2. Offer listing fields
 
@@ -234,7 +251,7 @@ These cannot be completed from this repository:
 5. **Offer listing.** Paste the name, summary, and description from section 2; upload
    the 300x300 logo and the three 1366x768 screenshots from section 3; enter the support
    URL and support email.
-6. **Technical configuration.** Upload `dist/atlynFunnelA1B2C3D4.1.0.0.0.pbiviz` and the
+6. **Technical configuration.** Upload `dist/atlynFunnelA1B2C3D4.1.0.1.0.pbiviz` and the
    sample `.pbix`.
 7. **Submit for review** and respond to validation feedback. Microsoft's review outcome
    is not predictable from this repository, and certification (the separate, stricter
