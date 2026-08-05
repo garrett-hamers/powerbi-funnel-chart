@@ -71,7 +71,10 @@ const committed = readRecord(".") as {
  */
 const withTamperedTree = (
   mutate: (record: Record<string, unknown>, root: string) => void,
-  run: (failures: string[]) => void
+  run: (failures: string[]) => void,
+  // Some audit paths can only be reached when publication.json and the record
+  // disagree, which no amount of record tampering reproduces.
+  screenshotPathsOverride?: string[]
 ) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "atlyn-funnel-record-"));
   try {
@@ -86,7 +89,7 @@ const withTamperedTree = (
         root,
         record,
         sceneIds,
-        screenshotPaths: publication.assets.screenshots,
+        screenshotPaths: screenshotPathsOverride ?? publication.assets.screenshots,
         packageSha256: committed.package.sha256,
         packageName: committed.package.filename
       })
@@ -405,6 +408,72 @@ describe("record construction", () => {
         measured: { width: 1282, height: 900, visible: true, insideTile: false, insideFrame: true }
       })
     ).toBe(true);
+  });
+
+  test("every audit failure path has been observed to fire", () => {
+    /*
+     * This file reports with fail(message), not finding(scenario, "id"), so the id-based
+     * coverage check run against the probe and the scene expectations returned 0 rules
+     * here - a needle that matched nothing, reported as nothing to find. There are 20
+     * fail() paths, and eight had never been exercised.
+     *
+     * All eight speak. None is dead. Recorded here so the claim is a measurement rather
+     * than the absence of one, and so this file meets the same standard as its siblings:
+     * "the check passed" and "the check is capable of failing" are separate evidence.
+     *
+     * One wrinkle worth keeping: deleting a scene's screenshot path makes two scenes
+     * share an undefined path, so the duplicate-vouching rule fires alongside the
+     * missing-path one. The audit fails either way, which is what matters, but the first
+     * message names the wrong cause.
+     */
+    withTamperedTree(
+      (record) => {
+        const scenes = record.scenes as Array<Record<string, unknown>>;
+        scenes[1].screenshot = JSON.parse(JSON.stringify(scenes[0].screenshot));
+      },
+      (failures) => expect(failures.join("\n")).toContain("the same screenshot from more than one scene")
+    );
+
+    withTamperedTree(
+      (record) => {
+        delete (firstScene(record).assertions as Array<Record<string, unknown>>)[1].name;
+      },
+      (failures) => expect(failures.join("\n")).toContain("records an assertion with no name")
+    );
+
+    withTamperedTree(
+      (record) => {
+        delete firstScene(record).demonstrates;
+      },
+      (failures) => expect(failures.join("\n")).toContain("must say what the scene demonstrates")
+    );
+
+    /*
+     * Reachable only through disagreement between publication.json and the record: any
+     * path a scene records other than its own file trips the scene-to-file binding rule
+     * first, so record tampering alone can never surface this message. My first attempt
+     * asserted it on a rewritten path and got the binding message instead - the
+     * instrument was wrong, not the code, for the third time tonight.
+     */
+    withTamperedTree(
+      () => {},
+      (failures) => expect(failures.join("\n")).toContain("which publication.json does not declare"),
+      publication.assets.screenshots.slice(1)
+    );
+
+    withTamperedTree(
+      (record) => {
+        (firstScene(record).screenshot as Record<string, unknown>).bytes = 1;
+      },
+      (failures) => expect(failures.join("\n")).toContain("bytes but")
+    );
+
+    withTamperedTree(
+      (record) => {
+        (record.package as Record<string, unknown>).sha256 = "0".repeat(64);
+      },
+      (failures) => expect(failures.join("\n")).toContain("says the screenshots were rendered from")
+    );
   });
 
   test("an expectation shape assertionHolds does not recognise falls through to the count map", () => {
