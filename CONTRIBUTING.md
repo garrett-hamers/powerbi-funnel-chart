@@ -47,3 +47,11 @@ Two details that are easy to get wrong, both learned by getting them wrong here:
 This has closed a live defect report in this repository twice: once by a pull
 request that said it was leaving the issue open, and once by the pull request
 that documented the first occurrence.
+
+Everything above is avoidance, and avoidance is forgettable. **After merging a
+pull request that mentions an issue you are not resolving, list the open issues
+and confirm it is still there.** Both closes here were noticed only because an
+issue count moved during a check being run for something else; neither announced
+itself, and both recorded a reason of `COMPLETED`. Checking the outcome catches
+this regardless of which surface or wording caused it, which no amount of care
+with the wording can promise.
