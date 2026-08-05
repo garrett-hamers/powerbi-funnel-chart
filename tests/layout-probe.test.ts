@@ -644,6 +644,8 @@ describe("containment is decided by effect, not by declaration", () => {
     display: "block",
     clientWidth: 258,
     clientHeight: 198,
+    scrollWidth: 258,
+    scrollHeight: 420,
     isContainingBlock: false,
     containsContainingBlock: false,
     ...overrides
@@ -653,11 +655,21 @@ describe("containment is decided by effect, not by declaration", () => {
     expect(exemptingAncestor([ancestor()], false)).not.toBeNull();
   });
 
-  test("a scroll container whose content currently fits still excuses it", () => {
-    // The tempting stronger test — require scrollHeight > clientHeight — would reject
-    // this and start reporting escapes that are genuinely contained. An empty scroll
-    // container still clips.
-    expect(exemptingAncestor([ancestor({ clientHeight: 198 })], false)).not.toBeNull();
+  test("a scroll container with nothing currently to scroll still excuses it", () => {
+    /*
+     * The case that disproves the tempting predicate. Measured in Chrome: a block with
+     * `overflow: auto` holding 5px of content in a 50px box reports
+     * clientHeight === scrollHeight and genuinely clips. Requiring
+     * `scrollHeight > clientHeight` would reject it and the probe would start reporting
+     * escapes for content it actually contains — wrong in the direction that generates
+     * noise, which is how a probe gets distrusted and then ignored.
+     *
+     * This test fails if anyone reintroduces that predicate, which is the point of
+     * recording scroll geometry on the chain at all.
+     */
+    const noScrollGeometry = ancestor({ clientHeight: 50, scrollHeight: 50, clientWidth: 258, scrollWidth: 258 });
+    expect(noScrollGeometry.scrollHeight).toBe(noScrollGeometry.clientHeight);
+    expect(exemptingAncestor([noScrollGeometry], false)).not.toBeNull();
   });
 
   test("a display: table ancestor excuses nothing, because its overflow computes away", () => {
@@ -665,17 +677,17 @@ describe("containment is decided by effect, not by declaration", () => {
     // Chrome, for both a styled div and a real <table>. Reading the computed value is
     // what makes this safe; a probe reading the declaration would be fooled.
     expect(exemptingAncestor([
-      ancestor({ element: "table.atlyn-accessible-table", display: "table", overflowX: "visible", overflowY: "visible", clientHeight: 288, clientWidth: 428 })
+      ancestor({ element: "table.atlyn-accessible-table", display: "table", overflowX: "visible", overflowY: "visible", clientHeight: 288, clientWidth: 428, scrollHeight: 288, scrollWidth: 428 })
     ], false)).toBeNull();
   });
 
   test("an inline ancestor excuses nothing, though its overflow computes to auto", () => {
     // Measured: `display: inline` + `overflow: auto` computes to overflow-y: auto with a
     // 0x0 client box. It reads as a scroller and clips nothing, so it must not exempt
-    // the boxes beneath it. This is the case a declaration check and a computed-value
-    // check both get wrong.
+    // the boxes beneath it. Chrome normalises the table case and does not normalise
+    // this one, which is why the computed value alone is not sufficient.
     expect(exemptingAncestor([
-      ancestor({ element: "span.badge", display: "inline", clientWidth: 0, clientHeight: 0 })
+      ancestor({ element: "span.badge", display: "inline", clientWidth: 0, clientHeight: 0, scrollWidth: 0, scrollHeight: 0 })
     ], false)).toBeNull();
   });
 

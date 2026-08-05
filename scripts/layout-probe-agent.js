@@ -167,6 +167,15 @@
           // overflow computes.
           clientWidth: node.clientWidth,
           clientHeight: node.clientHeight,
+          /*
+           * Recorded so the rule can be tested against the case that disproves the
+           * tempting predicate, and never so the rule can use it. A scroll container
+           * whose content currently fits reports scrollHeight === clientHeight and
+           * still clips; requiring scroll geometry here would start reporting escapes
+           * that are genuinely contained.
+           */
+          scrollWidth: node.scrollWidth,
+          scrollHeight: node.scrollHeight,
           isContainingBlock: Boolean(containingBlock) && node === containingBlock,
           containsContainingBlock: Boolean(containingBlock) && node.contains(containingBlock)
         });
