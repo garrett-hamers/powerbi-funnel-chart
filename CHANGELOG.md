@@ -4,6 +4,34 @@ All notable changes to Atlyn Funnel are documented here.
 
 ## Unreleased
 
+- The screenshot capture now asserts what each scene actually drew, so a screenshot
+  cannot be written unless the scene it claims to show really rendered. Previously
+  `scripts/capture-screenshots.cjs` checked only that each PNG was exactly 1366x768 and
+  under the 1024 KB Partner Center cap and never inspected the DOM, so an empty chart, a
+  chart that failed to bind its data, or a chart whose content rendered outside the
+  visible area would have passed every check and shipped as a submission asset. Static
+  analysis of the finished PNG cannot close that gap — these funnels are a flat design
+  whose correct renders carry only 261-330 distinct colours, so any colour or blankness
+  floor loose enough to pass them also passes a nearly-blank wrong render, and
+  pixel-diffing against goldens breaks on every Chrome, font and rasteriser change. The
+  assertion is therefore made at capture time: Chromium writes the PNG and dumps the DOM
+  in one invocation, `scripts/screenshot-content-agent.js` counts the scene's elements
+  and measures their boxes in that same render, and
+  `scripts/screenshot-scene-expectations.cjs` holds a separate expectation per scene —
+  `01-conversion-funnel` requires six strictly narrowing valued stages, a bound Target
+  and no diagnostics panel; `02-segment-comparison` requires two overall-conversion
+  metrics and four labels and four stage rows for each of North America and EMEA, each
+  segment narrowing on its own; `03-diagnostics` requires the diagnostics panel naming
+  the inferred-order, blank-value and nonmonotonic findings, one dashed `blank` marker,
+  no bar drawn for the blank stage, and the later stage visibly increasing. Presence
+  alone is not enough, since the failure worth guarding against is an element that sits
+  in the DOM the whole time it is broken while rendering at zero height, so every region
+  that must be visible is measured with `getBoundingClientRect()` and clipped against
+  both the tile the host gave the visual and the captured frame. A scene that fails is
+  never written to `assets/screenshots/`, and its stale file is removed rather than left
+  behind while the run reports success. `npm run screenshots:verify` runs the same gate
+  without touching the committed assets, and CI runs it on every push.
+
 - Fixed a small-tile layout defect that hid the funnel itself. The visual root stacked
   its regions with a `min-height: 80px` / `min-width: 160px` floor and no way to shrink,
   so as a tile narrowed the chrome above the chart wrapped onto more lines and pushed the

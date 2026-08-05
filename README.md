@@ -89,6 +89,41 @@ artifact the customer actually receives. Set `CHROME_PATH` if Chrome, Edge, or C
 not in a default install location. No browser automation package is added to
 `package.json`, so `npm ci` and `npm audit` are unaffected.
 
+### Capture-time content assertions
+
+Size and byte budget are necessary but nowhere near sufficient. An empty chart, a chart
+that failed to bind its data, and a chart whose content rendered outside the visible area
+are all correctly sized PNGs under the cap, so those checks alone would commit any of them
+as a submission asset. Inspecting the finished PNG cannot close that gap either: this
+funnel is a flat design whose correct renders carry only 261-330 distinct colours, so any
+colour or blankness floor loose enough to pass them would also pass a nearly-blank wrong
+render, and pixel-diffing against goldens breaks on every Chrome, font and rasteriser
+change.
+
+So the content is asserted while the scene is still rendered, when it is still known what
+was supposed to be drawn. Chromium writes the PNG and dumps the DOM in the same
+invocation, so `scripts/screenshot-content-agent.js` measures the very render the
+screenshot shows, and `scripts/screenshot-scene-expectations.cjs` gives each scene its own
+expectation:
+
+| Scene | Must show |
+| --- | --- |
+| `01-conversion-funnel` | 6 valued stages that strictly narrow, 6 labels, 1 overall-conversion metric, a bound Target, and **no** diagnostics panel |
+| `02-segment-comparison` | 8 bars, **2** overall-conversion metrics, and 4 labels and 4 stage rows for each of North America and EMEA, each segment narrowing on its own |
+| `03-diagnostics` | the diagnostics panel naming the inferred-order, blank-value and nonmonotonic findings, one dashed `blank` marker, no bar drawn for the blank stage, and the later stage visibly increasing |
+
+The expectations are deliberately different from one another, because one shared check
+would catch neither a missing second segment nor missing diagnostics. Alongside the counts
+every region that has to be visible is measured with `getBoundingClientRect()` and clipped
+against both the tile the host gave the visual and the captured frame, since the failure
+worth guarding against is an element that sits in the DOM the whole time it is broken while
+rendering at zero height. A scene that fails is never written to `assets/screenshots`, and
+its stale file is removed rather than left behind reporting success.
+
+`npm run screenshots:verify` runs every assertion without touching `assets/screenshots`,
+which is how CI gates scene content without turning a runner's font stack into committed
+byte churn.
+
 ## Small-tile layout probe
 
 Power BI gives a custom visual a fixed box and clips whatever does not fit, so a layout

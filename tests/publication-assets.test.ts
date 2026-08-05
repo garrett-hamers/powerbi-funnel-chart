@@ -209,6 +209,7 @@ describe("Partner Center media assets", () => {
 
   test("the screenshot pipeline stays wired to real renders of the packaged bundle", () => {
     expect(packageJson.scripts.screenshots).toBe("node scripts/capture-screenshots.cjs");
+    expect(packageJson.scripts["screenshots:verify"]).toBe("node scripts/capture-screenshots.cjs --verify");
     expect(packageJson.scripts.icons).toBe("node scripts/build-icons.cjs");
     expect(packageJson.scripts["layout-probe"]).toBe("node scripts/layout-probe.cjs");
     expect(fs.existsSync("scripts/capture-screenshots.cjs")).toBe(true);
@@ -223,6 +224,57 @@ describe("Partner Center media assets", () => {
     // `pbiviz package` runs its own build, so dist/visual.js is not that artifact.
     expect(harness).toContain("readPackagedBundle");
     expect(fs.readFileSync("scripts/packaged-bundle.cjs", "utf8")).toContain(".pbiviz");
+  });
+
+  test("the capture asserts what each scene drew, not just how big the PNG is", () => {
+    // Size and byte checks pass on an empty chart, on a chart that failed to bind its
+    // data, and on a chart that rendered outside the visible area. Only an assertion
+    // made while the scene is still rendered can tell those from a correct render, so
+    // the capture has to inspect the DOM before it writes anything.
+    expect(fs.existsSync("scripts/screenshot-scene-expectations.cjs")).toBe(true);
+    expect(fs.existsSync("scripts/screenshot-content-agent.js")).toBe(true);
+
+    const capture = fs.readFileSync("scripts/capture-screenshots.cjs", "utf8");
+    expect(capture).toContain("screenshot-scene-expectations.cjs");
+    expect(capture).toContain("screenshot-content-agent.js");
+    // The PNG and the DOM have to come out of one browser run, otherwise the
+    // assertions describe a render the screenshot never contained.
+    expect(capture).toContain("--dump-dom");
+    expect(capture).toContain("--screenshot=");
+
+    const agent = fs.readFileSync("scripts/screenshot-content-agent.js", "utf8");
+    expect(agent).toContain("querySelectorAll");
+    // Presence alone is not enough: the failure mode this guards against was an
+    // element that sat in the DOM the entire time it rendered at zero height.
+    expect(agent).toContain("getBoundingClientRect");
+  });
+
+  test("every screenshot scene declares its own content expectation", () => {
+    const scenarios = JSON.parse(
+      fs.readFileSync("assets/sample-data/screenshot-scenarios.json", "utf8")
+    ) as { scenarios: Array<{ id: string }> };
+    const { SCENE_EXPECTATIONS, expectationFor } =
+      require("../scripts/screenshot-scene-expectations.cjs") as {
+        SCENE_EXPECTATIONS: Record<string, { requiredRegions: string[]; forbiddenRegions: string[] }>;
+        expectationFor: (id: string) => unknown;
+      };
+
+    scenarios.scenarios.forEach((scenario) => {
+      expect(expectationFor(scenario.id)).toBeTruthy();
+      expect(publication.assets.screenshots).toContain(`assets/screenshots/${scenario.id}.png`);
+    });
+    expect(Object.keys(SCENE_EXPECTATIONS).sort()).toEqual(
+      scenarios.scenarios.map((scenario) => scenario.id).sort()
+    );
+
+    // One generic check shared by all three scenes would catch neither a missing
+    // second segment nor missing diagnostics, so the expectations must differ.
+    const shapes = Object.values(SCENE_EXPECTATIONS).map((expectation) =>
+      JSON.stringify(expectation)
+    );
+    expect(new Set(shapes).size).toBe(shapes.length);
+    expect(SCENE_EXPECTATIONS["03-diagnostics"].requiredRegions).toContain("warnings");
+    expect(SCENE_EXPECTATIONS["01-conversion-funnel"].forbiddenRegions).toContain("warnings");
   });
 });
 
