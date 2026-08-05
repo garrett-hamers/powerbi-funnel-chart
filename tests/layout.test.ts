@@ -190,6 +190,33 @@ describe("viewport-derived layout", () => {
     expect(resolveLayout(178, 138)).toEqual(expect.objectContaining({ tiny: true, showStageList: false }));
     expect(resolveLayout(160, 80)).toEqual(expect.objectContaining({ tiny: true, showStageList: false }));
   });
+
+  test("pins the tile size at which the accessible table may take visual space", () => {
+    /*
+     * TABLE_MIN_WIDTH/HEIGHT were chosen from measurement — at 178x138 opening the table
+     * leaves the chart 45px, and at 160x80 only 13px — but that measurement lived only in
+     * a comment beside the constants, and nothing re-derived it. A layout change could
+     * move the real boundary while the comment kept asserting the old one, and no test
+     * would fail.
+     *
+     * This does not re-measure the 45px; it pins the decision the measurement justified,
+     * so the two cases the comment names are checked on every run rather than trusted.
+     */
+    expect(resolveLayout(178, 138).expandTableOnFocus).toBe(false);
+    expect(resolveLayout(160, 80).expandTableOnFocus).toBe(false);
+
+    // Both extents are required. One axis clearing the bar is not enough, because the
+    // table needs room in both directions before it can be shown without erasing the
+    // funnel — the same extent-versus-area distinction the layout probe enforces.
+    expect(resolveLayout(220, 180).expandTableOnFocus).toBe(true);
+    expect(resolveLayout(219, 180).expandTableOnFocus).toBe(false);
+    expect(resolveLayout(220, 179).expandTableOnFocus).toBe(false);
+    expect(resolveLayout(1000, 179).expandTableOnFocus).toBe(false);
+    expect(resolveLayout(219, 1000).expandTableOnFocus).toBe(false);
+
+    // A tile the probe actually exercises, above the boundary on both axes.
+    expect(resolveLayout(258, 198).expandTableOnFocus).toBe(true);
+  });
 });
 
 describe("chrome degrades before data", () => {
