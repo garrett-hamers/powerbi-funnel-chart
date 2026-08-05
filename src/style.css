@@ -227,18 +227,26 @@
  * sized, clipped and scrolled.
  */
 .atlyn-accessible-table-scroll {
-  /* clip-path replaces the deprecated clip, and unlike clip it needs no positioning. */
+  /*
+   * clip-path, not the deprecated `clip`, and the difference is load-bearing. The old
+   * rule hid a full-size 428x288 table behind `clip: rect(0 0 0 0)` while that table was
+   * absolutely positioned against the initial containing block, so it hung 274x213px
+   * outside the smallest supported tile and was invisible only because `clip` suppressed
+   * painting. Swapping `clip` for `clip-path` — the obvious modernisation — would have
+   * exposed all of it.
+   *
+   * This box no longer depends on that: it is a 1x1 block container with
+   * `overflow: hidden`, so it really clips its own content, and the root is
+   * `position: relative`, so it resolves inside the visual. Dropping either property
+   * brings the escape back.
+   */
   clip-path: inset(50%);
   height: 1px;
   margin: 0;
   min-height: 0;
   overflow: hidden;
   padding: 0;
-  /*
-   * Out of flow at rest so the hidden table costs the funnel no space, and safely so:
-   * the root is `position: relative`, which makes it this box's containing block, so
-   * the root's overflow really does clip it.
-   */
+  /* Out of flow at rest, so the hidden table costs the funnel no space. */
   position: absolute;
   width: 1px;
 }

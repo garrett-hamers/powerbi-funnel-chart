@@ -574,42 +574,47 @@
     };
 
     var positioned = [];
-    walk(mount, function (element) {
-      if (element === mount) {
-        return;
-      }
-      var style = getComputedStyle(element);
-      if (style.position === "static" || style.position === "relative") {
-        return;
-      }
-      var node = parentOf(element);
-      var containingBlockElement = null;
-      while (node) {
-        if (node.nodeType === Node.ELEMENT_NODE && establishesContainingBlock(node)) {
-          containingBlockElement = node;
-          break;
+    var collectPositioned = function () {
+      var entries = [];
+      walk(mount, function (element) {
+        if (element === mount) {
+          return;
         }
-        node = node.nodeType === 11 ? node.host : parentOf(node);
-      }
-      positioned.push({
-        element: describe(element),
-        position: style.position,
-        zIndexSpecified: style.zIndex,
-        // Only meaningful when the element is positioned; recorded together so a rule
-        // can refuse to compare stacking order in a context that does not exist.
-        participatesInStacking: style.position !== "static",
-        containingBlock: containingBlockElement ? describe(containingBlockElement) : null,
-        /*
-         * The containing block has to be the visual root or something inside it. If it
-         * is not, the box belongs to the page: the root cannot clip it and the root's
-         * scrolling cannot move it, so the escape walk's "has a scrolling ancestor"
-         * test — true for in-flow boxes — wrongly treats it as contained.
-         */
-        containingBlockInsideRoot: Boolean(containingBlockElement) &&
-          (containingBlockElement === mount || mount.contains(containingBlockElement)),
-        box: boxOf(element)
+        var style = getComputedStyle(element);
+        if (style.position === "static" || style.position === "relative") {
+          return;
+        }
+        var node = parentOf(element);
+        var containingBlockElement = null;
+        while (node) {
+          if (node.nodeType === Node.ELEMENT_NODE && establishesContainingBlock(node)) {
+            containingBlockElement = node;
+            break;
+          }
+          node = node.nodeType === 11 ? node.host : parentOf(node);
+        }
+        entries.push({
+          element: describe(element),
+          position: style.position,
+          zIndexSpecified: style.zIndex,
+          // Only meaningful when the element is positioned; recorded together so a rule
+          // can refuse to compare stacking order in a context that does not exist.
+          participatesInStacking: style.position !== "static",
+          containingBlock: containingBlockElement ? describe(containingBlockElement) : null,
+          /*
+           * The containing block has to be the visual root or something inside it. If it
+           * is not, the box belongs to the page: the root cannot clip it and the root's
+           * scrolling cannot move it, so the escape walk's "has a scrolling ancestor"
+           * test — true for in-flow boxes — wrongly treats it as contained.
+           */
+          containingBlockInsideRoot: Boolean(containingBlockElement) &&
+            (containingBlockElement === mount || mount.contains(containingBlockElement)),
+          box: boxOf(element)
+        });
       });
-    });
+      return entries;
+    };
+    positioned = collectPositioned();
     report.positioning = {
       rootPosition: getComputedStyle(mount).position,
       funnelPosition: funnel ? getComputedStyle(funnel).position : null,
@@ -725,6 +730,13 @@
         stageListHeightAfter: afterStageList ? boxOf(afterStageList).height : null,
         rootScrolledBy: round((funnel ? funnel.scrollTop : 0) - rootScrollBefore),
         rootHiddenY: funnel ? Math.max(0, funnel.scrollHeight - funnel.clientHeight) : 0,
+        /*
+         * Positioning is re-measured here, not reused from the resting pass. Opening the
+         * table flips it from out of flow to in flow, so the two states resolve against
+         * different containing blocks: a fix that corrects only one of them is half a
+         * fix, and this is the state where the defect was worst.
+         */
+        positioned: collectPositioned(),
         escapes: escapesNow()
       };
       if (funnel) {

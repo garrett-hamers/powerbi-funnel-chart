@@ -108,6 +108,7 @@ const cleanReport = (): Record<string, unknown> => ({
     stageListHeightAfter: null,
     rootScrolledBy: 0,
     rootHiddenY: 0,
+    positioned: [],
     escapes: []
   }
 });
@@ -359,6 +360,25 @@ describe("scroll-time and focus-time assertions", () => {
       box: { width: 428, height: 288, left: 0, top: 0, right: 428, bottom: 288 }
     }];
     expect(rules(report)).toContain("positioned-outside-root");
+  });
+
+  test("checks containing blocks in the focused state as well as at rest", () => {
+    // Opening the table moves it between in-flow and out-of-flow, so the two states
+    // resolve against different containing blocks. Correcting only one is half a fix.
+    const report = cleanReport();
+    focusState(report).positioned = [{
+      element: "div.atlyn-accessible-table-scroll",
+      position: "absolute",
+      zIndexSpecified: "auto",
+      participatesInStacking: true,
+      containingBlock: null,
+      containingBlockInsideRoot: false,
+      box: { width: 428, height: 288, left: 0, top: 0, right: 428, bottom: 288 }
+    }];
+    const found = evaluateReport(scenario, report);
+    expect(found.map((entry) => entry.rule)).toContain("positioned-outside-root");
+    expect(found.find((entry) => entry.rule === "positioned-outside-root")?.detail)
+      .toContain("with the accessible table open");
   });
 
   test("accepts a positioned box that resolves inside the visual", () => {

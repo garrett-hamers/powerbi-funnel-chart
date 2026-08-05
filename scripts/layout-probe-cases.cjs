@@ -127,31 +127,36 @@ const rootScroller = (report) =>
  * Kept here, pure, so a test can drive them with deliberately bad measurements. A rule
  * that has never been seen to fire is indistinguishable from one that cannot.
  */
+const evaluatePositionedBoxes = (scenario, entries, state, findings) => {
+  (entries ?? []).forEach((entry) => {
+    if (entry.position !== "absolute" && entry.position !== "fixed") {
+      return;
+    }
+    /*
+     * A box whose containing block is above the visual root belongs to the page, not to
+     * the tile: the root's overflow cannot clip it and the root's scrolling cannot move
+     * it. The escape walk treats a scrolling ancestor as containment, which is true for
+     * in-flow boxes and false for this one, so it has to be caught here.
+     */
+    if (!entry.containingBlockInsideRoot) {
+      findings.push(finding(
+        scenario,
+        "positioned-outside-root",
+        `${state}${entry.element} is position: ${entry.position} but resolves against ` +
+        `${entry.containingBlock ?? "the initial containing block"}, which is outside the visual, ` +
+        "so the root cannot clip or scroll it"
+      ));
+    }
+  });
+};
+
 const evaluatePositioning = (scenario, report, findings) => {
   const positioning = report.positioning;
   if (!positioning) {
     findings.push(finding(scenario, "positioning", "the probe reported no positioning triage"));
     return;
   }
-  (positioning.elements ?? []).forEach((entry) => {
-    if (entry.position === "absolute" || entry.position === "fixed") {
-      /*
-       * A box whose containing block is above the visual root belongs to the page, not
-       * to the tile: the root's overflow cannot clip it and the root's scrolling cannot
-       * move it. The escape walk treats a scrolling ancestor as containment, which is
-       * true for in-flow boxes and false for this one, so it has to be caught here.
-       */
-      if (!entry.containingBlockInsideRoot) {
-        findings.push(finding(
-          scenario,
-          "positioned-outside-root",
-          `${entry.element} is position: ${entry.position} but resolves against ` +
-          `${entry.containingBlock ?? "the initial containing block"}, which is outside the visual, ` +
-          "so the root cannot clip or scroll it"
-        ));
-      }
-    }
-  });
+  evaluatePositionedBoxes(scenario, positioning.elements, "", findings);
 };
 
 const evaluateScrollSweep = (scenario, report, findings) => {
@@ -373,6 +378,12 @@ const evaluateFocusState = (scenario, report, findings) => {
       `${escape.overflowLeft}/${escape.overflowTop}/${escape.overflowRight}/${escape.overflowBottom}px (l/t/r/b)`
     ));
   });
+  /*
+   * The same containing-block check, in the other state. Opening the table moves it
+   * between in-flow and out-of-flow, so the two states resolve against different
+   * containing blocks and a fix that corrects only one of them is half a fix.
+   */
+  evaluatePositionedBoxes(scenario, focusState.positioned, "with the accessible table open, ", findings);
 };
 
 const evaluateReport = (scenario, report) => {
