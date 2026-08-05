@@ -329,7 +329,13 @@ const evaluateFocusState = (scenario, report, findings) => {
   }
 
   if (expands && scroller) {
-    if (scroller.box.height < 4) {
+    /*
+     * Both extents. Measured: a wrapper collapsed on width renders 0x96 while a healthy
+     * one is 420x64 - the table wraps, so the failure makes this box *taller* and a
+     * height floor grows more satisfied as the render gets worse. This rule guards the
+     * defect the probe exists for, so it has to fail on either axis.
+     */
+    if (scroller.box.height < 4 || scroller.box.width < 4) {
       findings.push(finding(
         scenario,
         "focus-region-collapsed",
