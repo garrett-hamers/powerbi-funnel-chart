@@ -378,12 +378,79 @@ const evaluateFocusState = (scenario, report, findings) => {
       `${escape.overflowLeft}/${escape.overflowTop}/${escape.overflowRight}/${escape.overflowBottom}px (l/t/r/b)`
     ));
   });
+  (focusState.collapsed ?? []).forEach((entry) => {
+    findings.push(finding(
+      scenario,
+      "collapsed-when-focused",
+      `with the accessible table open, ${entry.element} collapsed to ` +
+      `${entry.box.width}x${entry.box.height}px while holding content`
+    ));
+  });
   /*
    * The same containing-block check, in the other state. Opening the table moves it
    * between in-flow and out-of-flow, so the two states resolve against different
    * containing blocks and a fix that corrects only one of them is half a fix.
    */
   evaluatePositionedBoxes(scenario, focusState.positioned, "with the accessible table open, ", findings);
+};
+
+const suppression = (scenario, rule, reason, detail) => ({
+  scenario: typeof scenario === "string" ? scenario : scenario.id,
+  rule,
+  reason,
+  detail
+});
+
+/*
+ * Findings that a precondition stopped this run from reporting.
+ *
+ * A gate that quietly drops a measurement makes the probe get *quieter* as the visual
+ * gets worse. That happened here: the gratuitous-root-scroll rule measured
+ * `scrolledRootBy.top: 31` and discarded it, because it first requires the focused
+ * element to have been fully visible — which it was not, because a second, co-present
+ * defect had it hanging outside the tile. One defect silenced the detector for the
+ * other, and the two would have had to be fixed in a particular order for the second
+ * ever to surface.
+ *
+ * So a suppressed measurement is reported as suppressed, with the reason. These do not
+ * fail the build; they exist so that silence and cleanliness cannot look the same.
+ */
+const collectSuppressions = (scenario, report) => {
+  const suppressions = [];
+  if (!report || report.ok !== true) {
+    return suppressions;
+  }
+
+  const root = rootScroller(report);
+  const rootFits = !root || (root.hiddenY <= 1 && root.hiddenX <= 1);
+  (report.focusChecks ?? []).forEach((check) => {
+    const scrolled = Math.abs(check.scrolledRootBy?.top ?? 0) > 1 ||
+      Math.abs(check.scrolledRootBy?.left ?? 0) > 1;
+    if (!scrolled) {
+      return;
+    }
+    const blockers = [];
+    if (!rootFits) {
+      blockers.push("the visual root already overflows, so a scroll here is expected");
+    }
+    if (!check.wasFullyVisible) {
+      blockers.push("the element was not fully visible before it was focused");
+    }
+    if (check.resizedOnFocus !== false) {
+      blockers.push("the element changes size when focused, so scrolling it into view is legitimate");
+    }
+    if (blockers.length > 0) {
+      suppressions.push(suppression(
+        scenario,
+        "focus-scrolls-root",
+        blockers.join("; "),
+        `focusing ${check.element} scrolled the visual root by ` +
+        `${check.scrolledRootBy.top}/${check.scrolledRootBy.left}px, and that was not reported`
+      ));
+    }
+  });
+
+  return suppressions;
 };
 
 const evaluateReport = (scenario, report) => {
@@ -549,6 +616,7 @@ module.exports = {
   DIAGNOSTIC_DATA,
   buildProbeScenarios,
   evaluateReport,
+  collectSuppressions,
   evaluatePositioning,
   evaluateScrollSweep,
   evaluateFocusState

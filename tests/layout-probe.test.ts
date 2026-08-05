@@ -8,7 +8,8 @@
 const {
   PROBE_VIEWPORTS,
   buildProbeScenarios,
-  evaluateReport
+  evaluateReport,
+  collectSuppressions
 } = require("../scripts/layout-probe-cases.cjs") as {
   PROBE_VIEWPORTS: Array<{ id: string; width: number; height: number }>;
   buildProbeScenarios: () => Array<Record<string, unknown>>;
@@ -16,6 +17,10 @@ const {
     scenario: Record<string, unknown>,
     report: Record<string, unknown>
   ) => Array<{ scenario: string; rule: string; detail: string }>;
+  collectSuppressions: (
+    scenario: Record<string, unknown>,
+    report: Record<string, unknown>
+  ) => Array<{ scenario: string; rule: string; reason: string; detail: string }>;
 };
 
 const scenario = { id: "case", title: "case", visual: { width: 258, height: 198 } };
@@ -108,6 +113,7 @@ const cleanReport = (): Record<string, unknown> => ({
     stageListHeightAfter: null,
     rootScrolledBy: 0,
     rootHiddenY: 0,
+    collapsed: [],
     positioned: [],
     escapes: []
   }
@@ -530,6 +536,18 @@ describe("scroll-time and focus-time assertions", () => {
     expect(rules(report)).toContain("escapes-root-when-focused");
   });
 
+  test("catches a region that collapses only once the table is open", () => {
+    // The collapse walk only ever ran at rest, so a chart that dies on focus was
+    // structurally invisible to it: `collapsed` came back empty while the funnel was
+    // being crushed to nothing.
+    const report = cleanReport();
+    focusState(report).collapsed = [{
+      element: "div.atlyn-chart-scroll",
+      box: { left: 0, top: 0, right: 246, bottom: 0, width: 246, height: 0 }
+    }];
+    expect(rules(report)).toContain("collapsed-when-focused");
+  });
+
   test("catches an accessible table that lost its rows or its focus", () => {
     const empty = cleanReport();
     focusState(empty).tableRows = 0;
@@ -538,5 +556,70 @@ describe("scroll-time and focus-time assertions", () => {
     const unfocusable = cleanReport();
     focusState(unfocusable).focused = false;
     expect(rules(unfocusable)).toContain("focus-region-lost");
+  });
+});
+
+/*
+ * A gate that quietly drops a measurement makes the probe grow *quieter* as the visual
+ * grows worse. That is what happened here: the root-scroll rule measured the scroll and
+ * discarded it, because its precondition was invalidated by a different, co-present
+ * defect. Silence and cleanliness must not look the same.
+ */
+describe("suppressed findings", () => {
+  const suppressions = (report: Record<string, unknown>) =>
+    collectSuppressions(scenario, report);
+
+  test("a clean measurement suppresses nothing", () => {
+    expect(suppressions(cleanReport())).toEqual([]);
+  });
+
+  test("reports a root scroll that a precondition stopped it reporting", () => {
+    // The exact shape measured on the broken build: the scroll was recorded, then
+    // dropped because the element had not been fully visible beforehand — which was
+    // true only because a second defect had it hanging outside the tile.
+    const report = cleanReport();
+    Object.assign((report.focusChecks as Array<Record<string, unknown>>)[0], {
+      wasFullyVisible: false,
+      scrolledRootBy: { top: 31, left: 0 }
+    });
+
+    // It is still not reported as a defect: the precondition is legitimate.
+    expect(rules(report)).not.toContain("focus-scrolls-root");
+    // But it is no longer invisible.
+    const found = suppressions(report);
+    expect(found.map((entry) => entry.rule)).toContain("focus-scrolls-root");
+    expect(found[0].detail).toContain("31");
+    expect(found[0].reason).toContain("not fully visible");
+  });
+
+  test("names every precondition that blocked the report", () => {
+    const report = cleanReport();
+    Object.assign((report.focusChecks as Array<Record<string, unknown>>)[0], {
+      wasFullyVisible: false,
+      resizedOnFocus: true,
+      scrolledRootBy: { top: 31, left: 0 }
+    });
+    report.scrollContainers = [{
+      element: "div.atlyn-funnel",
+      clientWidth: 258,
+      clientHeight: 198,
+      scrollWidth: 258,
+      scrollHeight: 325,
+      hiddenX: 0,
+      hiddenY: 127
+    }];
+    const reason = suppressions(report)[0].reason;
+    expect(reason).toContain("already overflows");
+    expect(reason).toContain("not fully visible");
+    expect(reason).toContain("changes size when focused");
+  });
+
+  test("says nothing about a focus that did not scroll the root", () => {
+    const report = cleanReport();
+    Object.assign((report.focusChecks as Array<Record<string, unknown>>)[0], {
+      wasFullyVisible: false,
+      scrolledRootBy: { top: 0, left: 0 }
+    });
+    expect(suppressions(report)).toEqual([]);
   });
 });

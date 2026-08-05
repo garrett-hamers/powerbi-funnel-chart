@@ -540,6 +540,36 @@
     };
 
     /*
+     * The collapse walk, re-run wherever the visual currently is. It only ever ran at
+     * rest, so a region that dies when something is focused was structurally invisible
+     * to it: `collapsed` came back empty while the funnel was being crushed to nothing.
+     */
+    var collapsedNow = function () {
+      var found = [];
+      walk(mount, function (element) {
+        if (element === mount) {
+          return;
+        }
+        var style = getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden") {
+          return;
+        }
+        var box = boxOf(element);
+        var hasContent = Boolean((element.textContent || "").trim()) ||
+          element.tagName.toLowerCase() === "svg";
+        if (
+          hasContent &&
+          element.getAttribute("aria-hidden") !== "true" &&
+          !inAccessibleTable(element) &&
+          (box.height < COLLAPSE_PX || box.width < COLLAPSE_PX)
+        ) {
+          found.push({ element: describe(element), box: box });
+        }
+      });
+      return found;
+    };
+
+    /*
      * Pass 1: positioning triage.
      *
      * An absolutely positioned box whose containing block sits above the visual root
@@ -737,6 +767,7 @@
          * fix, and this is the state where the defect was worst.
          */
         positioned: collectPositioned(),
+        collapsed: collapsedNow(),
         escapes: escapesNow()
       };
       if (funnel) {
