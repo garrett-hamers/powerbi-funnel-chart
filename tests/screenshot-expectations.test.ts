@@ -396,6 +396,36 @@ describe("screenshot content assertions", () => {
     })).toContain("bar-not-painted");
   });
 
+  test("every rule these expectations can report has been observed to fire", () => {
+    /*
+     * The same coverage check applied to the layout probe, applied here - and it should
+     * have been run at the same time, since this file is the probe's twin. Three rules
+     * had never been asserted by id: chart-label-count, stage-button-count and
+     * warning-count. Each does fire incidentally inside other tests, but nothing asserted
+     * it, so deleting any one of them would have left the suite green.
+     *
+     * "An assertion you have not seen fail is not proven" was the standard this file was
+     * written to, and three of its own rules did not meet it.
+     */
+    expect(rulesFor("01-conversion-funnel", (report) => {
+      report.chartLabels = (report.chartLabels as unknown[]).slice(0, 3);
+    })).toContain("chart-label-count");
+
+    expect(rulesFor("01-conversion-funnel", (report) => {
+      report.stageButtons = (report.stageButtons as unknown[]).slice(0, 2);
+    })).toContain("stage-button-count");
+
+    /*
+     * warning-count fires on the *clean* scenes, which set `warningItems: 0`. Scene 03
+     * uses `minWarningItems` instead, so slicing its diagnostics reports
+     * diagnostics-missing and never reaches this rule. My first attempt asserted it on 03
+     * and I nearly recorded a live rule as dead - the instrument was wrong, not the code.
+     */
+    expect(rulesFor("01-conversion-funnel", (report) => {
+      report.warnings = [textEntry("Blank value", 400, 18)];
+    })).toContain("warning-count");
+  });
+
   test("catches a funnel that stopped narrowing", () => {
     expect(rulesFor("01-conversion-funnel", (report) => {
       bars(report)[3].drawnWidth = 900;
