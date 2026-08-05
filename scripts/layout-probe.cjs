@@ -12,7 +12,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { writeHarnessPages } = require("./screenshot-harness.cjs");
 const { findBrowser, fileUrl, runHeadless, BROWSER_HINT } = require("./headless-browser.cjs");
-const { PROBE_VIEWPORTS, PROBE_DATA, buildProbeScenarios, evaluateReport, collectSuppressions } = require("./layout-probe-cases.cjs");
+const { PROBE_VIEWPORTS, PROBE_DATA, buildProbeScenarios, evaluateReport, collectSuppressions, unexcusedEscapes } = require("./layout-probe-cases.cjs");
 
 const root = path.resolve(__dirname, "..");
 const workDirectory = path.join(root, ".tmp", "layout-probe");
@@ -119,7 +119,10 @@ const main = async () => {
       `${tile.width}x${tile.height}`,
       report.ok ? `${report.contentHeight}px` : "n/a",
       report.ok ? `${rootScroller ? rootScroller.hiddenY : 0}px` : "n/a",
-      report.ok ? String((report.escapes ?? []).length) : "n/a",
+      // Unexcused escapes: a box that left the tile with nothing legitimately clipping
+      // it. The raw candidate list also contains boxes a scroll container properly
+      // contains, which are not defects.
+      report.ok ? String(unexcusedEscapes(report.escapes).length) : "n/a",
       chart ? `${Math.round((chart.visibleFraction ?? 0) * 100)}%` : "-",
       chart ? `${chart.box.height}px` : "-",
       stages ? `${stages.box.height}px` : "dropped",

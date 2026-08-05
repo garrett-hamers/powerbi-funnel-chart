@@ -9,7 +9,8 @@ const {
   PROBE_VIEWPORTS,
   buildProbeScenarios,
   evaluateReport,
-  collectSuppressions
+  collectSuppressions,
+  exemptingAncestor
 } = require("../scripts/layout-probe-cases.cjs") as {
   PROBE_VIEWPORTS: Array<{ id: string; width: number; height: number }>;
   buildProbeScenarios: () => Array<Record<string, unknown>>;
@@ -21,6 +22,10 @@ const {
     scenario: Record<string, unknown>,
     report: Record<string, unknown>
   ) => Array<{ scenario: string; rule: string; reason: string; detail: string }>;
+  exemptingAncestor: (
+    chain: Array<Record<string, unknown>> | undefined,
+    outOfFlow?: boolean
+  ) => Record<string, unknown> | null;
 };
 
 const scenario = { id: "case", title: "case", visual: { width: 258, height: 198 } };
@@ -621,5 +626,104 @@ describe("suppressed findings", () => {
       scrolledRootBy: { top: 0, left: 0 }
     });
     expect(suppressions(report)).toEqual([]);
+  });
+});
+
+/*
+ * Which ancestor legitimately excuses a box from leaving the tile.
+ *
+ * This decision used to live in-page, where it could not be driven by a test. The
+ * measurements below are the real ones from headless Chrome, so the rule is exercised
+ * against what browsers actually report rather than against what the CSS says.
+ */
+describe("containment is decided by effect, not by declaration", () => {
+  const ancestor = (overrides: Record<string, unknown> = {}) => ({
+    element: "div.atlyn-funnel",
+    overflowX: "auto",
+    overflowY: "auto",
+    display: "block",
+    clientWidth: 258,
+    clientHeight: 198,
+    scrollWidth: 258,
+    scrollHeight: 420,
+    isContainingBlock: false,
+    containsContainingBlock: false,
+    ...overrides
+  });
+
+  test("a real scroll container excuses an in-flow box", () => {
+    expect(exemptingAncestor([ancestor()], false)).not.toBeNull();
+  });
+
+  test("a scroll container with nothing currently to scroll still excuses it", () => {
+    /*
+     * The case that disproves the tempting predicate. Measured in Chrome: a block with
+     * `overflow: auto` holding 5px of content in a 50px box reports
+     * clientHeight === scrollHeight and genuinely clips. Requiring
+     * `scrollHeight > clientHeight` would reject it and the probe would start reporting
+     * escapes for content it actually contains — wrong in the direction that generates
+     * noise, which is how a probe gets distrusted and then ignored.
+     *
+     * This test fails if anyone reintroduces that predicate, which is the point of
+     * recording scroll geometry on the chain at all.
+     */
+    const noScrollGeometry = ancestor({ clientHeight: 50, scrollHeight: 50, clientWidth: 258, scrollWidth: 258 });
+    expect(noScrollGeometry.scrollHeight).toBe(noScrollGeometry.clientHeight);
+    expect(exemptingAncestor([noScrollGeometry], false)).not.toBeNull();
+  });
+
+  test("a display: table ancestor excuses nothing, because its overflow computes away", () => {
+    // Measured: `display: table` + `overflow: auto` computes to overflow-y: visible in
+    // Chrome, for both a styled div and a real <table>. Reading the computed value is
+    // what makes this safe; a probe reading the declaration would be fooled.
+    expect(exemptingAncestor([
+      ancestor({ element: "table.atlyn-accessible-table", display: "table", overflowX: "visible", overflowY: "visible", clientHeight: 288, clientWidth: 428, scrollHeight: 288, scrollWidth: 428 })
+    ], false)).toBeNull();
+  });
+
+  test("an inline ancestor excuses nothing, though its overflow computes to auto", () => {
+    // Measured: `display: inline` + `overflow: auto` computes to overflow-y: auto with a
+    // 0x0 client box. It reads as a scroller and clips nothing, so it must not exempt
+    // the boxes beneath it. Chrome normalises the table case and does not normalise
+    // this one, which is why the computed value alone is not sufficient.
+    expect(exemptingAncestor([
+      ancestor({ element: "span.badge", display: "inline", clientWidth: 0, clientHeight: 0, scrollWidth: 0, scrollHeight: 0 })
+    ], false)).toBeNull();
+  });
+
+  test("an out-of-flow box is only excused by a scroller that holds its containing block", () => {
+    const unrelated = [ancestor()];
+    expect(exemptingAncestor(unrelated, true)).toBeNull();
+
+    expect(exemptingAncestor([ancestor({ isContainingBlock: true })], true)).not.toBeNull();
+    expect(exemptingAncestor([ancestor({ containsContainingBlock: true })], true)).not.toBeNull();
+  });
+
+  test("no chain excuses nothing", () => {
+    expect(exemptingAncestor(undefined, false)).toBeNull();
+    expect(exemptingAncestor([], false)).toBeNull();
+  });
+
+  test("an escape with an excusing chain is not reported as a defect", () => {
+    const report = cleanReport();
+    report.escapes = [{
+      element: "svg.atlyn-chart",
+      box: { left: 0, top: 0, right: 258, bottom: 400, width: 258, height: 400 },
+      overflowLeft: 0,
+      overflowTop: 0,
+      overflowRight: 0,
+      overflowBottom: 202,
+      outOfFlow: false,
+      chain: [ancestor({ element: "div.atlyn-chart-scroll" })]
+    }];
+    expect(rules(report)).not.toContain("escapes-root");
+
+    // The same escape behind an inline ancestor is a defect, because nothing clips it.
+    const inline = cleanReport();
+    inline.escapes = [{
+      ...(report.escapes as Array<Record<string, unknown>>)[0],
+      chain: [ancestor({ element: "span.badge", display: "inline", clientWidth: 0, clientHeight: 0 })]
+    }];
+    expect(rules(inline)).toContain("escapes-root");
   });
 });
