@@ -18,7 +18,7 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "b24bcf3ac829bf184b7892970fce886af1d5597f",
+  "sourceCommit": "e031f2f4a24bea5d1622a9262083fc68e620011e",
   "packageVersion": "1.0.1",
   "privileges": [],
   "externalJS": [],
