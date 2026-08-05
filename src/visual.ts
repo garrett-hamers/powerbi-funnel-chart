@@ -13,9 +13,52 @@ import { createFormattingModel, DEFAULT_FUNNEL_SETTINGS, FunnelSettings, readFun
 import "./style.css";
 
 const MAX_BAR_WIDTH = 420;
-const MIN_CHART_HEIGHT = 220;
 const ROW_HEIGHT = 42;
 const MIN_VIEWPORT_SIZE = 0;
+const NARROW_WIDTH = 320;
+const SHORT_HEIGHT = 260;
+const TINY_WIDTH = 200;
+const TINY_HEIGHT = 150;
+const LABEL_CHAR_WIDTH = 6.2;
+
+/**
+ * Layout decisions derived from the host viewport rather than a media query: Power BI
+ * renders the visual in a shadow root inside a tile, so media queries see the report
+ * page, not the space the visual actually has.
+ *
+ * Everything switched off here is chrome. The funnel stages and the data-quality
+ * diagnostics are never dropped.
+ */
+export interface FunnelLayout {
+  width: number;
+  height: number;
+  compact: boolean;
+  narrow: boolean;
+  short: boolean;
+  tiny: boolean;
+  showTitle: boolean;
+  showIntake: boolean;
+  showStageList: boolean;
+  verboseStageText: boolean;
+}
+
+export const resolveLayout = (width: number, height: number): FunnelLayout => {
+  const narrow = width < NARROW_WIDTH;
+  const short = height < SHORT_HEIGHT;
+  const tiny = width < TINY_WIDTH || height < TINY_HEIGHT;
+  return {
+    width,
+    height,
+    compact: width < 480 || height < 320,
+    narrow,
+    short,
+    tiny,
+    showTitle: !narrow && !short,
+    showIntake: !narrow && !short,
+    showStageList: !narrow && !short,
+    verboseStageText: width >= 480 && height >= 320
+  };
+};
 
 interface StageSelection {
   id?: ISelectionId;
@@ -48,6 +91,8 @@ export class Visual implements IVisual {
   private groupCategory?: DataViewCategoryColumn;
   private valueColumns?: powerbi.DataViewValueColumns;
   private settings: FunnelSettings = DEFAULT_FUNNEL_SETTINGS;
+  private layout: FunnelLayout = resolveLayout(0, 0);
+  private readonly stageBars: SVGRectElement[] = [];
   private reducedMotion = false;
   private interactionsEnabled = true;
   private destroyed = false;
@@ -142,6 +187,7 @@ export class Visual implements IVisual {
     this.cleanupHandlers.splice(0).forEach((cleanup) => cleanup());
     this.selections.clear();
     this.stageButtons.splice(0);
+    this.stageBars.splice(0);
     while (this.root.firstChild) {
       this.root.removeChild(this.root.firstChild);
     }
@@ -162,10 +208,14 @@ export class Visual implements IVisual {
   }
 
   private render(width: number, height: number): void {
+    this.layout = resolveLayout(width, height);
     this.applyVisualStyles();
     this.setStateAttribute("data-high-contrast", Boolean(this.host.colorPalette?.isHighContrast));
     this.setStateAttribute("data-reduced-motion", this.reducedMotion);
-    this.setStateAttribute("data-compact", width < 480 || height < 320);
+    this.setStateAttribute("data-compact", this.layout.compact);
+    this.setStateAttribute("data-narrow", this.layout.narrow);
+    this.setStateAttribute("data-short", this.layout.short);
+    this.setStateAttribute("data-tiny", this.layout.tiny);
     this.root.style.width = `${Math.max(0, width)}px`;
     this.root.style.height = `${Math.max(0, height)}px`;
     this.root.removeAttribute("data-state");
@@ -191,7 +241,9 @@ export class Visual implements IVisual {
       this.root.appendChild(warningPanel);
     }
     this.root.appendChild(this.createChart(width, height));
-    this.root.appendChild(this.createStageList());
+    if (this.layout.showStageList) {
+      this.root.appendChild(this.createStageList());
+    }
     this.root.appendChild(this.createAccessibleTable());
     this.root.setAttribute("aria-busy", "false");
     this.restoreFocus();
@@ -206,9 +258,11 @@ export class Visual implements IVisual {
     summary.className = "atlyn-summary";
     summary.setAttribute("aria-label", this.localizer.text("overallConversion"));
     const first = this.model.stages[0];
-    const heading = document.createElement("h2");
-    heading.textContent = this.localizer.text("title", "Atlyn Funnel");
-    summary.appendChild(heading);
+    if (this.layout.showTitle) {
+      const heading = document.createElement("h2");
+      heading.textContent = this.localizer.text("title", "Atlyn Funnel");
+      summary.appendChild(heading);
+    }
     const overallByGroup = [...new Set(this.model.stages.map((stage) => stage.group ?? ""))];
     overallByGroup.forEach((group) => {
       const groupStages = this.model.stages.filter((stage) => (stage.group ?? "") === group);
@@ -216,13 +270,21 @@ export class Visual implements IVisual {
       const overall = document.createElement("span");
       overall.className = "atlyn-summary-metric";
       const groupLabel = group ? ` (${this.localizer.text("group")} ${group})` : "";
-      overall.textContent = `${this.localizer.text("overallConversion")}${groupLabel}: ${this.localizer.percent(last.overallConversion)}`;
+      const full = `${this.localizer.text("overallConversion")}${groupLabel}: ${this.localizer.percent(last.overallConversion)}`;
+      // On a tiny tile the label is chrome; the percentage itself is the data, so the
+      // caption is dropped and the full sentence stays available as a description.
+      overall.textContent = this.layout.tiny
+        ? `${group ? `${group}: ` : ""}${this.localizer.percent(last.overallConversion)}`
+        : full;
+      overall.title = full;
       summary.appendChild(overall);
     });
-    const intake = document.createElement("span");
-    intake.className = "atlyn-summary-intake";
-    intake.textContent = `${first.label}: ${this.localizer.number(first.value, undefined, first.valueFormat)}`;
-    summary.appendChild(intake);
+    if (this.layout.showIntake) {
+      const intake = document.createElement("span");
+      intake.className = "atlyn-summary-intake";
+      intake.textContent = `${first.label}: ${this.localizer.number(first.value, undefined, first.valueFormat)}`;
+      summary.appendChild(intake);
+    }
     return summary;
   }
 
@@ -252,11 +314,17 @@ export class Visual implements IVisual {
   }
 
   private createChart(width: number, height: number): HTMLDivElement {
+    const layout = this.layout;
     const chartScroll = document.createElement("div");
     chartScroll.className = "atlyn-chart-scroll";
     chartScroll.setAttribute("role", "region");
     chartScroll.setAttribute("aria-label", this.localizer.text("stageListLabel"));
-    chartScroll.style.maxHeight = `${Math.max(150, Math.floor(height * 0.55))}px`;
+    // The chart is the data, so it claims most of the tile and the remaining chrome
+    // shrinks around it. Without a ceiling a tall funnel would push everything else
+    // out, so the ceiling is a share of the tile rather than a fixed pixel floor.
+    const inset = layout.compact ? 12 : 20;
+    const available = Math.max(32, height - inset);
+    chartScroll.style.maxHeight = `${Math.max(40, Math.round(available * (layout.showStageList ? 0.65 : 0.94)))}px`;
     chartScroll.addEventListener("click", (event) => {
       if (event.target === chartScroll && this.interactionsEnabled) {
         this.clearSelection();
@@ -271,8 +339,12 @@ export class Visual implements IVisual {
 
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("atlyn-chart");
-    const canvasWidth = Math.max(width, 320);
-    const chartHeight = Math.max(MIN_CHART_HEIGHT, this.model.stages.length * ROW_HEIGHT + 16);
+    // The viewBox tracks the real CSS width. A wider viewBox would make the browser
+    // scale the whole drawing down to fit, which shrinks the labels below legibility
+    // on a small tile instead of simply drawing a smaller funnel.
+    const canvasWidth = Math.max(120, Math.round(width - inset));
+    const rowHeight = height >= 320 ? ROW_HEIGHT : height >= 220 ? 30 : 20;
+    const chartHeight = this.model.stages.length * rowHeight + 12;
     svg.setAttribute("viewBox", `0 0 ${canvasWidth} ${chartHeight}`);
     svg.setAttribute("height", String(chartHeight));
     svg.style.height = `${chartHeight}px`;
@@ -294,10 +366,14 @@ export class Visual implements IVisual {
       .map((stage) => stage.value)
       .filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
     const maxValue = Math.max(1, ...positiveValues);
-    const chartWidth = Math.min(MAX_BAR_WIDTH, Math.max(160, width - 220));
-    const rowHeight = ROW_HEIGHT;
+    const showLabels = this.settings.labelsShow && !layout.tiny;
+    const labelGutter = showLabels ? Math.max(56, Math.min(240, Math.round(canvasWidth * 0.3))) : 8;
+    const chartWidth = Math.max(24, Math.min(MAX_BAR_WIDTH, canvasWidth - labelGutter * 2));
+    const labelBudget = Math.max(4, Math.floor((labelGutter - 10) / LABEL_CHAR_WIDTH));
+    const barHeight = Math.max(8, rowHeight - 8);
+    this.stageBars.splice(0);
     this.model.stages.forEach((stage, index) => {
-      const y = index * rowHeight + 8;
+      const y = index * rowHeight + 6;
       const barWidth =
         stage.value !== null && stage.value > 0
           ? Math.max(4, Math.min(chartWidth, (stage.value / maxValue) * chartWidth))
@@ -307,7 +383,7 @@ export class Visual implements IVisual {
       bar.setAttribute("x", String(x));
       bar.setAttribute("y", String(y));
       bar.setAttribute("width", String(barWidth));
-      bar.setAttribute("height", String(Math.max(18, rowHeight - 8)));
+      bar.setAttribute("height", String(barHeight));
       bar.setAttribute("rx", "4");
       bar.setAttribute("class", `atlyn-bar atlyn-${stage.valueState}${stage.highlighted ? "" : " atlyn-dimmed"}`);
       bar.setAttribute("data-stage-key", stage.key);
@@ -321,27 +397,38 @@ export class Visual implements IVisual {
       bar.addEventListener("keydown", (event) => this.navigateStage(index, event));
       this.bindStagePointerInteractions(bar, stage);
       svg.appendChild(bar);
+      this.stageBars.push(bar);
 
       if (stage.valueState !== "value") {
         const marker = document.createElementNS("http://www.w3.org/2000/svg", "line");
         const markerWidth = stage.valueState === "zero" ? 8 : stage.valueState === "invalid" ? 18 : 14;
         marker.setAttribute("x1", String((canvasWidth - markerWidth) / 2));
         marker.setAttribute("x2", String((canvasWidth + markerWidth) / 2));
-        marker.setAttribute("y1", String(y + rowHeight / 2));
-        marker.setAttribute("y2", String(y + rowHeight / 2));
+        marker.setAttribute("y1", String(y + barHeight / 2));
+        marker.setAttribute("y2", String(y + barHeight / 2));
         marker.setAttribute("class", `atlyn-state-marker atlyn-${stage.valueState}`);
         marker.setAttribute("data-value-state", stage.valueState);
         marker.setAttribute("aria-hidden", "true");
         svg.appendChild(marker);
       }
 
-      if (this.settings.labelsShow) {
+      if (showLabels) {
         const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        label.setAttribute("x", String(this.localizer.direction === "rtl" ? 10 : canvasWidth - 10));
-        label.setAttribute("y", String(y + rowHeight / 2));
-        label.setAttribute("text-anchor", this.localizer.direction === "rtl" ? "start" : "end");
+        const rtl = this.localizer.direction === "rtl";
+        // text-anchor is relative to the inline base direction, so in RTL the "end"
+        // edge is the left one. Anchoring on "start" there would hang the label off
+        // the left of the canvas, where it is clipped away entirely.
+        label.setAttribute("x", String(rtl ? 6 : canvasWidth - 6));
+        label.setAttribute("y", String(y + barHeight / 2));
+        label.setAttribute("text-anchor", "end");
         label.setAttribute("class", "atlyn-chart-label");
-        label.textContent = `${this.stageLabel(stage, index)} · ${this.localizer.number(stage.value, undefined, stage.valueFormat)}`;
+        // The bar already carries the full accessible name, so a visually truncated
+        // label is decorative and must not be announced twice.
+        label.setAttribute("aria-hidden", "true");
+        label.textContent = this.truncateLabel(
+          `${this.stageLabel(stage, index)} · ${this.localizer.number(stage.value, undefined, stage.valueFormat)}`,
+          labelBudget
+        );
         svg.appendChild(label);
       }
     });
@@ -370,7 +457,11 @@ export class Visual implements IVisual {
       button.setAttribute("aria-setsize", String(this.model.stages.length));
       button.setAttribute("aria-label", this.stageAriaLabel(stage));
       const targetLabel = stage.target === null ? "" : `; ${this.localizer.text("target")}: ${this.localizer.number(stage.target, undefined, stage.targetFormat)}`;
-      button.textContent = `${this.localizer.text("stage")}: ${this.stageLabel(stage, index)}; ${this.localizer.text("value")}: ${this.localizer.number(stage.value, undefined, stage.valueFormat)}; ${this.localizer.text("stageConversion")}: ${this.localizer.percent(stage.stageConversion)}; ${this.localizer.text("dropRate")}: ${this.localizer.percent(stage.dropRate)}; ${this.localizer.text("absoluteLoss")}: ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${targetLabel}`;
+      // The full sentence is chrome: it wraps onto five or six lines on a narrow tile
+      // and pushes the funnel out of view. The accessible name keeps every figure.
+      button.textContent = this.layout.verboseStageText
+        ? `${this.localizer.text("stage")}: ${this.stageLabel(stage, index)}; ${this.localizer.text("value")}: ${this.localizer.number(stage.value, undefined, stage.valueFormat)}; ${this.localizer.text("stageConversion")}: ${this.localizer.percent(stage.stageConversion)}; ${this.localizer.text("dropRate")}: ${this.localizer.percent(stage.dropRate)}; ${this.localizer.text("absoluteLoss")}: ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${targetLabel}`
+        : `${this.stageLabel(stage, index)} · ${this.localizer.number(stage.value, undefined, stage.valueFormat)} · ${this.localizer.percent(stage.stageConversion)}`;
       button.addEventListener("click", (event) => this.selectStage(stage, event));
       button.addEventListener("keydown", (event) => this.navigateStage(index, event));
       this.bindStagePointerInteractions(button, stage);
@@ -432,14 +523,15 @@ export class Visual implements IVisual {
   }
 
   private navigateStage(index: number, event: KeyboardEvent): void {
+    const targets = this.navigationTargets();
     const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 0;
     if (direction !== 0) {
       event.preventDefault();
-      const nextIndex = Math.max(0, Math.min(this.stageButtons.length - 1, index + direction));
-      this.stageButtons[nextIndex]?.focus();
+      const nextIndex = Math.max(0, Math.min(targets.length - 1, index + direction));
+      targets[nextIndex]?.focus();
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
-      this.stageButtons[event.key === "Home" ? 0 : this.stageButtons.length - 1]?.focus();
+      targets[event.key === "Home" ? 0 : targets.length - 1]?.focus();
     } else if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       const stage = this.model.stages[index];
@@ -449,6 +541,18 @@ export class Visual implements IVisual {
     } else if (event.key === "Escape") {
       this.clearSelection();
     }
+  }
+
+  /**
+   * The stage list is dropped on a small tile, so arrow-key navigation falls back to
+   * the chart bars, which carry the same selection behaviour and accessible names.
+   */
+  private navigationTargets(): Array<HTMLElement | SVGElement> {
+    return this.stageButtons.length > 0 ? this.stageButtons : this.stageBars;
+  }
+
+  private truncateLabel(text: string, budget: number): string {
+    return text.length <= budget ? text : `${text.slice(0, Math.max(1, budget - 1)).trimEnd()}…`;
   }
 
   private selectStage(stage: FunnelStage, event: MouseEvent | KeyboardEvent): void {
@@ -713,9 +817,22 @@ export class Visual implements IVisual {
     return `${this.localizer.text("stage")} ${stage.label}, ${this.localizer.text("value")} ${this.localizer.number(stage.value, undefined, stage.valueFormat)}${group}${state}, ${this.localizer.text("overallConversion")} ${this.localizer.percent(stage.overallConversion)}, ${this.localizer.text("stageConversion")} ${this.localizer.percent(stage.stageConversion)}, ${this.localizer.text("dropRate")} ${this.localizer.percent(stage.dropRate)}, ${this.localizer.text("absoluteLoss")} ${this.localizer.number(stage.absoluteLoss, undefined, stage.valueFormat)}${target}`;
   }
 
+  /**
+   * Power BI mounts custom visuals inside a shadow root, where document.activeElement
+   * resolves to the shadow host rather than the focused control. Walking into the
+   * shadow roots is what makes focus restoration work in the real host.
+   */
+  private activeElement(): Element | undefined {
+    let active: Element | null = document.activeElement;
+    while (active?.shadowRoot?.activeElement) {
+      active = active.shadowRoot.activeElement;
+    }
+    return active ?? undefined;
+  }
+
   private captureFocus(): void {
-    const active = document.activeElement;
-    if (!(active instanceof Element) || !this.root.contains(active)) {
+    const active = this.activeElement();
+    if (!active || !this.root.contains(active)) {
       return;
     }
     this.focusedStageKey =
@@ -736,7 +853,10 @@ export class Visual implements IVisual {
     const stageKey = this.focusedStageKey;
     this.focusedStageKey = undefined;
     this.focusedTable = false;
-    this.stageButtons.find((button) => button.dataset.stageKey === stageKey)?.focus();
+    const target = this.navigationTargets().find(
+      (candidate) => candidate.getAttribute("data-stage-key") === stageKey
+    );
+    target?.focus();
   }
 
   private clearChildren(): void {
@@ -744,6 +864,7 @@ export class Visual implements IVisual {
     this.clearLongPressTimers();
     this.selections.clear();
     this.stageButtons.splice(0);
+    this.stageBars.splice(0);
     while (this.root.firstChild) {
       this.root.removeChild(this.root.firstChild);
     }

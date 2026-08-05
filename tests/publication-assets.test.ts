@@ -207,16 +207,22 @@ describe("Partner Center media assets", () => {
     }
   );
 
-  test("the screenshot pipeline stays wired to real renders of the built bundle", () => {
+  test("the screenshot pipeline stays wired to real renders of the packaged bundle", () => {
     expect(packageJson.scripts.screenshots).toBe("node scripts/capture-screenshots.cjs");
     expect(packageJson.scripts.icons).toBe("node scripts/build-icons.cjs");
+    expect(packageJson.scripts["layout-probe"]).toBe("node scripts/layout-probe.cjs");
     expect(fs.existsSync("scripts/capture-screenshots.cjs")).toBe(true);
     expect(fs.existsSync("scripts/screenshot-harness.cjs")).toBe(true);
+    expect(fs.existsSync("scripts/packaged-bundle.cjs")).toBe(true);
     expect(fs.existsSync("scripts/build-icons.cjs")).toBe(true);
     expect(fs.existsSync("assets/icon.svg")).toBe(true);
     const harness = fs.readFileSync("scripts/screenshot-harness.cjs", "utf8");
     expect(harness).toContain("dist");
     expect(harness).toContain("attachShadow");
+    // A listing screenshot has to depict the artifact the customer receives, and
+    // `pbiviz package` runs its own build, so dist/visual.js is not that artifact.
+    expect(harness).toContain("readPackagedBundle");
+    expect(fs.readFileSync("scripts/packaged-bundle.cjs", "utf8")).toContain(".pbiviz");
   });
 });
 

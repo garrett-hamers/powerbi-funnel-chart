@@ -283,6 +283,10 @@ requireCondition(
   packageJson.scripts?.["sample-report"] === "node scripts/build-sample-report.cjs",
   "the sample report generator must stay wired into npm scripts"
 );
+requireCondition(
+  packageJson.scripts?.["layout-probe"] === "node scripts/layout-probe.cjs",
+  "the small-tile layout probe must stay wired into npm scripts"
+);
 
 requireCondition(listing.pricing === "Free", "publication.json must record the free AppSource listing");
 requireCondition(

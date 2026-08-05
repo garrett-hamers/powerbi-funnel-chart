@@ -10,6 +10,7 @@
     "lint": "npm run eslint",
     "test": "jest --runInBand",
     "package": "node scripts/package.cjs",
+    "layout-probe": "node scripts/layout-probe.cjs",
     "screenshots": "node scripts/capture-screenshots.cjs",
     "icons": "node scripts/build-icons.cjs",
     "sample-report": "node scripts/build-sample-report.cjs",

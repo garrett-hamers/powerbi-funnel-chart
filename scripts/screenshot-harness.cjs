@@ -6,9 +6,13 @@
  * Power BI renders custom visuals inside a shadow root, which is why src/style.css
  * declares its design tokens on :host. The harness reproduces that by attaching a
  * shadow root and mounting the visual inside it.
+ *
+ * By default the harness loads the bytes that ship inside dist/*.pbiviz. Pass
+ * `{ source: "dist" }` to load the raw webpack output instead.
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { readPackagedBundle } = require("./packaged-bundle.cjs");
 
 const root = path.resolve(__dirname, "..");
 const distDirectory = path.join(root, "dist");
@@ -24,14 +28,29 @@ const readScenarios = () => {
   return parsed;
 };
 
-const readBundle = () => {
+const readDistBundle = () => {
   if (!fs.existsSync(bundlePath) || !fs.existsSync(stylePath)) {
     throw new Error("dist/visual.js and dist/visual.css are missing; run `npm run build` first");
   }
+  const js = fs.readFileSync(bundlePath, "utf8");
+  const css = fs.readFileSync(stylePath, "utf8");
   return {
-    js: fs.readFileSync(bundlePath, "utf8"),
-    css: fs.readFileSync(stylePath, "utf8")
+    js,
+    css,
+    source: "dist",
+    guid: "atlynFunnelA1B2C3D4",
+    packageName: "dist/visual.js",
+    jsBytes: Buffer.byteLength(js, "utf8"),
+    cssBytes: Buffer.byteLength(css, "utf8")
   };
+};
+
+const readBundle = async (source = "packaged") => {
+  if (source === "dist") {
+    return readDistBundle();
+  }
+  const packaged = await readPackagedBundle();
+  return { ...packaged, source: "packaged" };
 };
 
 const embed = (value) =>
@@ -63,6 +82,9 @@ const bootstrap = `
     source: { displayName: "Value", queryName: "Funnel.Value", roles: { Value: true } },
     values: scenario.value
   }];
+  if (scenario.highlights) {
+    values[0].highlights = scenario.highlights;
+  }
   if (scenario.stageOrder) {
     values.push({
       source: { displayName: "Stage order", queryName: "Funnel.StageOrder", roles: { StageOrder: true } },
@@ -87,8 +109,8 @@ const bootstrap = `
     hostCapabilities: { allowInteractions: true },
     colorPalette: {
       isHighContrast: Boolean(scenario.highContrast),
-      foreground: { value: "#172033" },
-      background: { value: "#ffffff" }
+      foreground: { value: scenario.highContrast ? "#ffffff" : "#172033" },
+      background: { value: scenario.highContrast ? "#000000" : "#ffffff" }
     },
     createSelectionManager: function () {
       return {
@@ -146,9 +168,18 @@ const bootstrap = `
   mount.style.height = "100%";
   shadow.appendChild(mount);
 
+  var construct = function (options) {
+    var plugins = window.powerbi && window.powerbi.visuals && window.powerbi.visuals.plugins;
+    var plugin = plugins && plugins[window.__ATLYN_GUID__];
+    if (plugin && typeof plugin.create === "function") {
+      return plugin.create(options);
+    }
+    return new AtlynFunnel.Visual(options);
+  };
+
   try {
-    var visual = new AtlynFunnel.Visual({ element: mount, host: mockHost });
-    visual.update({
+    var visual = construct({ element: mount, host: mockHost });
+    var updateOptions = {
       dataViews: [dataView],
       viewport: { width: visualSize.width, height: visualSize.height },
       type: 62,
@@ -157,7 +188,24 @@ const bootstrap = `
       viewMode: 0,
       editMode: 0,
       isInFocus: false
-    });
+    };
+    visual.update(updateOptions);
+    window.__ATLYN_HARNESS__ = {
+      container: container,
+      shadow: shadow,
+      mount: mount,
+      visual: visual,
+      host: mockHost,
+      scenario: scenario,
+      dataView: dataView,
+      viewport: visualSize,
+      update: function (overrides) {
+        var next = {};
+        Object.keys(updateOptions).forEach(function (key) { next[key] = updateOptions[key]; });
+        Object.keys(overrides || {}).forEach(function (key) { next[key] = overrides[key]; });
+        visual.update(next);
+      }
+    };
   } catch (error) {
     document.documentElement.setAttribute("data-atlyn-render", "failed");
     document.documentElement.setAttribute("data-atlyn-error", String(error && error.message));
@@ -165,7 +213,7 @@ const bootstrap = `
 })();
 `;
 
-const buildHarnessHtml = (scenario, viewport, bundle) => `<!doctype html>
+const buildHarnessHtml = (scenario, viewport, bundle, options = {}) => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -188,7 +236,12 @@ html, body {
   border: 1px solid #d5dce7;
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(23, 32, 51, 0.08);
-  box-sizing: border-box;
+  /*
+   * content-box so the inline width/height below describe the space Power BI hands
+   * the visual. With border-box the decorative border would eat two pixels and every
+   * measurement would be two pixels short of the real tile.
+   */
+  box-sizing: content-box;
   overflow: hidden;
 }
 </style>
@@ -211,6 +264,7 @@ window.powerbi = {
     }
   }
 };
+window.__ATLYN_GUID__ = ${embed(options.guid ?? "atlynFunnelA1B2C3D4")};
 window.__ATLYN_SCENARIO__ = ${embed(scenario)};
 window.__ATLYN_VIEWPORT__ = ${embed(viewport)};
 window.__ATLYN_CSS__ = ${embed(bundle.css)};
@@ -221,27 +275,43 @@ ${bundle.js}
 <script>
 ${bootstrap}
 </script>
+${options.extraScript ? `<script>\n${options.extraScript}\n</script>` : ""}
 </body>
 </html>
 `;
 
-const writeHarnessPages = (outputDirectory) => {
-  const { scenarios, viewport } = readScenarios();
-  const bundle = readBundle();
+const writeHarnessPages = async (outputDirectory, options = {}) => {
+  const declared = readScenarios();
+  const scenarios = options.scenarios ?? declared.scenarios;
+  const defaultViewport = options.viewport ?? declared.viewport;
+  const bundle = await readBundle(options.source);
   fs.mkdirSync(outputDirectory, { recursive: true });
   return scenarios.map((scenario) => {
+    const pageViewport = scenario.page ?? defaultViewport;
     const htmlPath = path.join(outputDirectory, `${scenario.id}.html`);
-    fs.writeFileSync(htmlPath, buildHarnessHtml(scenario, viewport, bundle));
-    return { id: scenario.id, title: scenario.title, htmlPath, viewport };
+    fs.writeFileSync(
+      htmlPath,
+      buildHarnessHtml(scenario, pageViewport, bundle, {
+        extraScript: options.extraScript,
+        guid: bundle.guid
+      })
+    );
+    return { id: scenario.id, title: scenario.title, htmlPath, viewport: pageViewport, bundle };
   });
 };
 
-module.exports = { readScenarios, buildHarnessHtml, writeHarnessPages, scenarioPath };
+module.exports = { readScenarios, readBundle, buildHarnessHtml, writeHarnessPages, scenarioPath };
 
 if (require.main === module) {
   const outputDirectory = path.join(root, ".tmp", "screenshots");
-  const pages = writeHarnessPages(outputDirectory);
-  pages.forEach((page) => {
-    process.stdout.write(`Harness written: ${path.relative(root, page.htmlPath)}\n`);
-  });
+  writeHarnessPages(outputDirectory)
+    .then((pages) => {
+      pages.forEach((page) => {
+        process.stdout.write(`Harness written: ${path.relative(root, page.htmlPath)}\n`);
+      });
+    })
+    .catch((error) => {
+      process.stderr.write(`Harness generation failed: ${error.message}\n`);
+      process.exit(1);
+    });
 }

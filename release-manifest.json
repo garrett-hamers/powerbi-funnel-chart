@@ -9,8 +9,8 @@
   },
   "package": {
     "filename": "atlynFunnelA1B2C3D4.1.0.1.0.pbiviz",
-    "sha256": "bd6da7c1201b319eb3f262b999226c97b109c1e48b1e60369e61f7c4bbda697d",
-    "bytes": 49118
+    "sha256": "4d7ce6fc29f78907c5c0d539849ea1b2c19dca65e56e9a39555813d4fb66384a",
+    "bytes": 50150
   },
   "reproducible": true,
   "zipNormalization": {
@@ -18,7 +18,7 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "dd301a906c00c8ff76a1e2e48176ac24b32431a2",
+  "sourceCommit": "c5d5215c97536f1effe00662d08679d5dab06954",
   "packageVersion": "1.0.1",
   "privileges": [],
   "externalJS": [],
@@ -45,24 +45,24 @@
         "format": "png",
         "width": 1366,
         "height": 768,
-        "bytes": 48128,
-        "sha256": "7e9b2b9c1762627c95c7cc8a3a19670de56bd52f7fc515d93b2fca60bf1af840"
+        "bytes": 47119,
+        "sha256": "808d86606faebc2899ad9a68141b4e5f1df3b4ac4f3860a599489f41d269aee2"
       },
       {
         "path": "assets/screenshots/02-segment-comparison.png",
         "format": "png",
         "width": 1366,
         "height": 768,
-        "bytes": 66841,
-        "sha256": "a964bbe5397f3b339bc327ef22bbe7ca0db71720ac0396fae3cb0f03fa55125d"
+        "bytes": 65378,
+        "sha256": "dc22d840ec0c5ab812e8bfaae81a472f1cd349e3c525a3dc5b96bff35a3b6101"
       },
       {
         "path": "assets/screenshots/03-diagnostics.png",
         "format": "png",
         "width": 1366,
         "height": 768,
-        "bytes": 51599,
-        "sha256": "7a0efd31a58505a26e10d2198b7a58fdf37d3b240afdefd5fd203a6b7b58d176"
+        "bytes": 50762,
+        "sha256": "8e1d341887b000122c3fdacca4ec978fedf1f3f5796340a6cab98d33d0d49c5e"
       }
     ],
     "eula": {
@@ -72,15 +72,15 @@
     },
     "submissionDossier": {
       "path": "docs/partner-center-submission.md",
-      "bytes": 18738,
-      "sha256": "dc21909353f6f38954bc915edd010dd9802c8aafd610a3203c6f5f73c3a18fce"
+      "bytes": 20493,
+      "sha256": "71f539e577c288d9b92b59817f988cfbc0c82bd3dbd345b84a9a4dae75535f80"
     },
     "sampleReportProject": {
       "path": "samples/atlyn-funnel-sample",
       "format": "pbip",
       "files": 18,
-      "bytes": 181963,
-      "sha256": "a9c831fa1e161e66d40914ebca700a3a23f969fbf91c7004ac7daf468c1ce5ac"
+      "bytes": 185244,
+      "sha256": "a28c01bc1423a3d9ead0ddb2d22f6541d73e6ef3f5ec38b46228d7642eebd4e9"
     }
   },
   "publication": {

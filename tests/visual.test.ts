@@ -462,8 +462,11 @@ describe("Atlyn Funnel visual lifecycle and interactions", () => {
     const root = element.querySelector(".atlyn-funnel") as HTMLElement | null;
     expect(root?.style.getPropertyValue("--atlyn-primary")).toBe("#ffff00");
     expect(root?.getAttribute("dir")).toBe("rtl");
-    expect(element.querySelector(".atlyn-chart-label")?.getAttribute("x")).toBe("10");
-    expect(element.querySelector(".atlyn-chart-label")?.getAttribute("text-anchor")).toBe("start");
+    // text-anchor is resolved against the inline base direction, so in RTL the "end"
+    // edge is the left one. Anchoring "start" at the left gutter used to hang every
+    // label off the canvas, where the SVG clipped it away.
+    expect(element.querySelector(".atlyn-chart-label")?.getAttribute("x")).toBe("6");
+    expect(element.querySelector(".atlyn-chart-label")?.getAttribute("text-anchor")).toBe("end");
     visual.destroy();
   });
 

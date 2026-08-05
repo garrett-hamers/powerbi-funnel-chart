@@ -36,6 +36,7 @@ npm run typecheck
 npm run lint
 npm run build
 npm run package
+npm run layout-probe
 npm run release-manifest
 npm run certification-audit
 npm run audit
@@ -74,16 +75,47 @@ The screenshots are real renders of the built bundle, regenerated with:
 
 ```powershell
 npm run build
+npm run package
 npm run screenshots
 ```
 
 `npm run screenshots` builds one offline harness page per scenario in `.tmp/screenshots`
-— the packaged bundle and stylesheet are inlined, a shadow root reproduces the Power BI
-style boundary, and a mock `IVisualHost` supplies the literal data in
+— the JS and CSS are read out of `dist/*.pbiviz` and inlined, a shadow root reproduces the
+Power BI style boundary, and a mock `IVisualHost` supplies the literal data in
 `assets/sample-data/screenshot-scenarios.json` — then drives a headless Chromium-family
-browser at exactly 1366x768. Set `CHROME_PATH` if Chrome, Edge, or Chromium is not in a
-default install location. No browser automation package is added to `package.json`, so
-`npm ci` and `npm audit` are unaffected.
+browser at exactly 1366x768. `pbiviz package` runs its own build, so the packaged bundle
+is not byte-identical to `dist/visual.js`, and a listing screenshot has to depict the
+artifact the customer actually receives. Set `CHROME_PATH` if Chrome, Edge, or Chromium is
+not in a default install location. No browser automation package is added to
+`package.json`, so `npm ci` and `npm audit` are unaffected.
+
+## Small-tile layout probe
+
+Power BI gives a custom visual a fixed box and clips whatever does not fit, so a layout
+that stacks regions which cannot shrink loses the chart silently as the tile narrows.
+`npm run layout-probe` measures that instead of assuming it:
+
+```powershell
+npm run build
+npm run package
+npm run layout-probe
+```
+
+It loads the same packaged bytes into the same shadow-root harness and reads real geometry
+back with `getBoundingClientRect()` at five tile sizes — 1280x620, 398x298, 258x198,
+178x138 and 160x80, the smallest size the stylesheet supports — plus diagnostics, RTL, high
+contrast and reduced-motion cases. The build fails when a box escapes the tile without a
+scrollable ancestor, when a region collapses or hides content behind `overflow: hidden`
+with no route to it, when the funnel is pushed out of view, when `text-overflow: ellipsis`
+is declared without `white-space: nowrap`, or when keyboard focus, selection state,
+reduced motion, high contrast or RTL regress. A test that only asserts the stylesheet is
+non-empty passes on a completely broken layout; only measured boxes catch it.
+
+Chrome degrades before data. As the tile shrinks the visual drops, in order, the heading
+that duplicates the tile title, the intake figure, the verbose stage sentence, the stage
+list, and finally the chart labels. The funnel stages, the conversion metric and the
+data-quality diagnostics always survive, and every figure that leaves the screen remains
+in the accessible table and the accessible names.
 
 The Partner Center sample `.pbix` is **not** in this repository: a `.pbix` embeds its
 data model as a binary Analysis Services backup image and cannot be produced headlessly.
