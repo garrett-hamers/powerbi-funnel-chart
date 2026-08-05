@@ -18,7 +18,7 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "e031f2f4a24bea5d1622a9262083fc68e620011e",
+  "sourceCommit": "01dfcb650b474d8779da2d34c42529208e6f8b2b",
   "packageVersion": "1.0.1",
   "privileges": [],
   "externalJS": [],
@@ -79,8 +79,8 @@
       "path": "samples/atlyn-funnel-sample",
       "format": "pbip",
       "files": 18,
-      "bytes": 185244,
-      "sha256": "a28c01bc1423a3d9ead0ddb2d22f6541d73e6ef3f5ec38b46228d7642eebd4e9"
+      "bytes": 188374,
+      "sha256": "167af14acaf080660c3cd94e4a75b44373257daa983a7e1f131af33bcede6b03"
     }
   },
   "publication": {
