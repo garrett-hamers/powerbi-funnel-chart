@@ -33,8 +33,17 @@ const RULES_DIR = "scripts";
  * runner and reported a prose fragment as an untested rules file. The discovery pattern
  * and the extraction pattern are now the same one, so they cannot disagree about what
  * counts as a rule.
+ *
+ * Both reporting verbs, not just the loud one. `finding()` fails the build; `suppression()`
+ * records a check a precondition stopped from running and is only printed. The quiet one
+ * needs this gate more, not less: an unasserted rule that fails loudly would at least be
+ * noticed the first time it fired, while an unasserted suppression that can never fire
+ * looks exactly like a suppression that had nothing to say.
+ *
+ * There is currently one suppression rule and it is asserted. It was not covered here
+ * until this gate was pointed at the mechanism beside the one it was built for.
  */
-const RULE_CALL = /finding\(\s*[A-Za-z_$][\w$.]*\s*,\s*["'`]([a-z0-9:-]+)["'`]/g;
+const RULE_CALL = /(?:finding|suppression)\(\s*[A-Za-z_$][\w$.]*\s*,\s*["'`]([a-z0-9:-]+)["'`]/g;
 
 const ruleFilesWithIds = (): string[] =>
   fs
