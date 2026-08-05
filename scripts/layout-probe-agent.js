@@ -706,6 +706,10 @@
      * looks perfect while the state a keyboard user actually reaches is unmeasured. The
      * rule is the same one that governs the rest of the visual: degrade chrome, never
      * data. Opening a table must not cost the funnel.
+     *
+     * If you ever extend this to move nodes around while testing a fix, re-focus after
+     * the move: reparenting a focused element blurs it, so the measurement silently
+     * describes the unfocused state and reads as the fix having failed.
      */
     var focusRegion = shadow.querySelector(".atlyn-accessible-table");
     if (focusRegion) {

@@ -43,7 +43,19 @@ const DIAGNOSTIC_DATA = {
   target: null
 };
 
-const page = (viewport) => ({ width: viewport.width + 40, height: viewport.height + 40 });
+/*
+ * The probe page is exactly the tile, not the tile plus a margin.
+ *
+ * A width media query in the packaged stylesheet resolves against the viewport, which
+ * is the browser window here and the per-visual iframe in a real host. Probing a small
+ * tile inside a larger window would evaluate those queries against the wrong number and
+ * silently measure a different stylesheet branch than the one that ships. This
+ * stylesheet currently has no width-based media queries — only prefers-reduced-motion —
+ * so nothing measured today depends on it, but the first `@media (max-width: …)` rule
+ * anyone adds would otherwise be probed wrongly from the moment it lands, and that kind
+ * of rule tends to arrive with a small-tile fix.
+ */
+const page = (viewport) => ({ width: viewport.width, height: viewport.height });
 
 const buildProbeScenarios = () => {
   const scenarios = PROBE_VIEWPORTS.map((viewport) => ({

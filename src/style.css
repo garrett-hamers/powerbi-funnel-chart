@@ -63,6 +63,13 @@
   flex-wrap: wrap;
   gap: 4px 12px;
   justify-content: space-between;
+  /*
+   * This ceiling, and the 35% and 45% on the warnings and stage list, are independent
+   * limits rather than a budget: they sum to more than 100% and that is harmless while
+   * every stacked region carries min-height: 0 and can shrink below its own ceiling.
+   * It stops being harmless the moment an unshrinkable box joins the flow, which is
+   * what the accessible table used to be.
+   */
   max-height: 40%;
   min-height: 0;
   overflow: hidden;

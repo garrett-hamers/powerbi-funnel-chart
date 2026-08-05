@@ -91,7 +91,7 @@ const main = async () => {
 
   const scenarios = buildProbeScenarios();
   const extraScript = fs.readFileSync(agentPath, "utf8");
-  const pages = await writeHarnessPages(workDirectory, { scenarios, extraScript });
+  const pages = await writeHarnessPages(workDirectory, { scenarios, extraScript, bare: true });
   const bundle = pages[0].bundle;
   process.stdout.write(
     `Probing ${pages.length} case(s) from ${bundle.packageName} ` +
