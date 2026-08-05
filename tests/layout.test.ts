@@ -13,13 +13,20 @@ import { DataViewLike } from "../src/model";
 const fs = require("node:fs") as typeof import("node:fs");
 
 const stylesheet = fs.readFileSync("src/style.css", "utf8");
+/*
+ * Comments are stripped before any rule is parsed. The parser below treats everything
+ * between `}` and `{` as the selector, so a comment sitting above a rule would be folded
+ * into that rule's selector and every assertion about it would silently describe the
+ * wrong thing.
+ */
+const stylesheetRules = stylesheet.replace(/\/\*[\s\S]*?\*\//g, "");
 
 const ruleBody = (selector: string): string => {
   const pattern = new RegExp(
     `(^|\\})\\s*${selector.replace(/[.[\]"=^$*+?()|{}\\/-]/g, "\\$&")}\\s*\\{([^}]*)\\}`,
     "m"
   );
-  const match = pattern.exec(stylesheet);
+  const match = pattern.exec(stylesheetRules);
   if (!match) {
     throw new Error(`src/style.css declares no rule for ${selector}`);
   }
@@ -33,7 +40,7 @@ const declaration = (selector: string, property: string): string | undefined => 
 };
 
 const cssRules = (): Array<{ selector: string; body: string }> =>
-  [...stylesheet.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((match) => ({
+  [...stylesheetRules.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((match) => ({
     selector: match[1].trim(),
     body: match[2]
   }));
@@ -140,7 +147,7 @@ describe("stylesheet layout contract", () => {
       .filter((rule) => /overflow\s*:\s*hidden/.test(rule.body))
       .map((rule) => rule.selector);
     expect(clipping.sort()).toEqual([
-      ".atlyn-accessible-table",
+      ".atlyn-accessible-table-scroll",
       ".atlyn-chart",
       ".atlyn-summary",
       ".atlyn-summary h2",

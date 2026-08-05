@@ -12,7 +12,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { writeHarnessPages } = require("./screenshot-harness.cjs");
 const { findBrowser, fileUrl, runHeadless, BROWSER_HINT } = require("./headless-browser.cjs");
-const { PROBE_VIEWPORTS, PROBE_DATA, buildProbeScenarios, evaluateReport } = require("./layout-probe-cases.cjs");
+const { PROBE_VIEWPORTS, PROBE_DATA, buildProbeScenarios, evaluateReport, collectSuppressions } = require("./layout-probe-cases.cjs");
 
 const root = path.resolve(__dirname, "..");
 const workDirectory = path.join(root, ".tmp", "layout-probe");
@@ -100,6 +100,7 @@ const main = async () => {
 
   const rows = [];
   const findings = [];
+  const suppressions = [];
   const reports = [];
   pages.forEach((page) => {
     const scenario = scenarios.find((candidate) => candidate.id === page.id);
@@ -125,6 +126,7 @@ const main = async () => {
       report.ok ? String((report.collapsed ?? []).length) : "n/a"
     ]);
     findings.push(...evaluateReport(scenario, report));
+    suppressions.push(...collectSuppressions(scenario, report));
   });
 
   printTable(rows);
@@ -132,6 +134,19 @@ const main = async () => {
   const detailPath = path.join(workDirectory, "layout-probe-report.json");
   fs.writeFileSync(detailPath, `${JSON.stringify(reports, null, 2)}\n`);
   process.stdout.write(`\nFull measurements: ${path.relative(root, detailPath)}\n`);
+
+  /*
+   * Printed before the verdict, and printed even when the run is clean. A measurement a
+   * precondition stopped this run from reporting is not the same as no measurement, and
+   * if the two look identical the probe grows quieter as the visual grows worse.
+   */
+  if (suppressions.length > 0) {
+    process.stdout.write(`\n${suppressions.length} finding(s) suppressed by a precondition:\n`);
+    suppressions.forEach((entry) => {
+      process.stdout.write(`  [${entry.scenario}] ${entry.rule}: ${entry.detail}\n`);
+      process.stdout.write(`      suppressed because ${entry.reason}\n`);
+    });
+  }
 
   if (findings.length === 0) {
     process.stdout.write("\nNo layout defects measured.\n");

@@ -175,6 +175,32 @@ is declared without `white-space: nowrap`, or when keyboard focus, selection sta
 reduced motion, high contrast or RTL regress. A test that only asserts the stylesheet is
 non-empty passes on a completely broken layout; only measured boxes catch it.
 
+### The states the probe enters
+
+Measuring only at rest — nothing scrolled, nothing focused — is measuring the one state a
+defect is least likely to show in. Content past the fold and content that only enters the
+flow on focus are both invisible to it. So the probe deliberately enters those states:
+
+- **Scrolled.** Every scrollable region is driven to top, middle and maximum, and the
+  escape walk is re-run at each offset. A region declared to overflow that stops
+  overflowing is *reported*, not skipped: a fixture that quietly stops overflowing makes
+  every assertion below it pass vacuously, which reads as green.
+- **Focused.** The accessible table only enters the flow on focus. The probe focuses it
+  and asserts that a real scroll container bounds it, that the funnel survives, and that
+  the root neither scrolls nor overflows. `overflow` and `max-height` are ignored on a
+  `display: table` box, so the bounding element is measured rather than inferred from the
+  stylesheet.
+- **Positioned.** The root's computed `position` is reported alongside every absolutely
+  positioned, fixed or sticky box and the containing block it actually resolves against.
+  A box whose containing block sits above the root belongs to the report page: the root
+  cannot clip it, and the escape walk's "does it have a scrolling ancestor" test — sound
+  for in-flow boxes — wrongly treats it as contained.
+
+Sticky rules are present although this visual has no sticky elements, and they refuse to
+compare stacking order unless `position: sticky` is actually computed, because
+`getComputedStyle().zIndex` returns the specified value even on an unpositioned element,
+so an order can look correct while nothing is stacking.
+
 Chrome degrades before data. As the tile shrinks the visual drops, in order, the heading
 that duplicates the tile title, the intake figure, the verbose stage sentence, the stage
 list, and finally the chart labels. The funnel stages, the conversion metric and the
