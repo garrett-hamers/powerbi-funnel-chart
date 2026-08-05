@@ -467,6 +467,27 @@ describe("scroll-time and focus-time assertions", () => {
     expect(rules(report)).toContain("focus-region-collapsed");
   });
 
+  test("catches an opened table that renders at no width, which makes it taller", () => {
+    /*
+     * The same rule, in the other axis. Measured in headless Chrome, a scroll wrapper
+     * holding the accessible table:
+     *
+     *   healthy wrapper       420x64
+     *   width: 0 wrapper        0x96   <- TALLER than healthy, and unreadable
+     *   max-height: 0 wrapper 420x0    <- the shape the rule was written for
+     *
+     * The table wraps when the wrapper collapses horizontally, so a height floor is not
+     * just incomplete here: the measured height moves *away* from the threshold as the
+     * failure worsens. This rule guards the defect the probe was built for - the table
+     * opening to `.atlyn-chart-scroll` at exactly 0px - and its own message is "present,
+     * focused and unreadable", which describes 0x96 precisely.
+     */
+    const report = cleanReport();
+    (focusState(report).scroller as Record<string, unknown>).box =
+      { width: 0, height: 96, left: 0, top: 0, right: 0, bottom: 96 };
+    expect(rules(report)).toContain("focus-region-collapsed");
+  });
+
   test("catches a container that overflows but will not actually scroll", () => {
     // Proven by writing an offset and reading it back. Deriving this from scrollHeight
     // and clientHeight would only restate the definition of overflow.
