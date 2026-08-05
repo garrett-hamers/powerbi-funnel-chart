@@ -178,6 +178,21 @@ const evaluateScrollSweep = (scenario, report, findings) => {
     return;
   }
   const expected = scenario.expectOverflow ?? [];
+
+  /*
+   * A container measured at rest that the sweep could not re-find drops out of every
+   * scroll-time assertion. Only names in `expectOverflow` are checked for absence, so
+   * without this an unlisted container would disappear from the report silently.
+   */
+  (report.scrollSweepDropped ?? []).forEach((entry) => {
+    findings.push(finding(
+      scenario,
+      "scroll-region-not-reswept",
+      `${entry.element} was measured as a scroll container at rest but could not be re-found ` +
+      "for the scroll sweep, so every scroll-time assertion about it is silently absent"
+    ));
+  });
+
   expected.forEach((selectorFragment) => {
     const container = sweep.find((entry) => entry.element.indexOf(selectorFragment) >= 0);
     if (!container) {

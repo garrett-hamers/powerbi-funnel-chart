@@ -730,6 +730,7 @@
      * assertion pass vacuously, so the sweep records what it found rather than skipping.
      */
     var sweep = [];
+    var sweepDropped = [];
     scrollContainers.forEach(function (container) {
       var element = null;
       walk(mount, function (candidate) {
@@ -738,6 +739,15 @@
         }
       });
       if (!element) {
+        /*
+         * Recorded, not skipped. This container was measured at rest and could not be
+         * re-found for the sweep, so every scroll-time assertion about it silently
+         * ceases to exist. Only containers named in `expectOverflow` are checked for
+         * absence, so an unlisted one would vanish from the report with nothing to say
+         * it had ever been there - the probe getting quieter as the visual gets worse,
+         * which is the exact failure the comment above promises this pass avoids.
+         */
+        sweepDropped.push({ element: container.element });
         return;
       }
       var maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
@@ -765,6 +775,7 @@
       });
     });
     report.scrollSweep = sweep;
+    report.scrollSweepDropped = sweepDropped;
 
     /*
      * Pass 3: the focused state.

@@ -369,6 +369,22 @@ describe("scroll-time and focus-time assertions", () => {
       .toContain("scroll-region-missing");
   });
 
+  test("reports a scroll container the sweep silently dropped", () => {
+    /*
+     * The sweep re-finds each container measured at rest. If it cannot, that container
+     * loses every scroll-time assertion at once - and `scroll-region-missing` only covers
+     * names listed in `expectOverflow`, so an unlisted one used to vanish with nothing
+     * saying it had ever been measured.
+     *
+     * That is the probe getting quieter as the visual gets worse, three lines below a
+     * comment promising this pass "records what it found rather than skipping". Measured
+     * 0 drops across all nine scenarios on the current build, so the rule is defensive.
+     */
+    const report = cleanReport();
+    report.scrollSweepDropped = [{ element: "div.atlyn-chart-scroll" }];
+    expect(rules(report)).toContain("scroll-region-not-reswept");
+  });
+
   test("catches a probe that never scrolled anything, and a region that refused to", () => {
     const missing = cleanReport();
     delete missing.scrollSweep;
