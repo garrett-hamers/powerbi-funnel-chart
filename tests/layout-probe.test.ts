@@ -691,6 +691,38 @@ describe("containment is decided by effect, not by declaration", () => {
     ], false)).toBeNull();
   });
 
+  test("an ancestor that paints nothing excuses nothing, however well it scrolls", () => {
+    /*
+     * The gap the 0x0 case above does not close. Measured in headless Chrome, a block
+     * with `overflow: auto` and one zero extent:
+     *
+     *   400x0 box, 900x500 content   scrollTop reaches 500   painted area 400x0
+     *   0x60 box,  900x500 content   scrollTop reaches 440   painted area   0x60
+     *
+     * Both report a computed scrolling overflow *and* a real, non-degenerate scroll
+     * range, so neither the declaration nor scroll geometry distinguishes them from a
+     * working scroller. They paint zero pixels, so no amount of scrolling reveals their
+     * content and they cannot excuse a box for leaving the tile.
+     *
+     * This is the failure mode that motivated the probe: `.atlyn-chart-scroll` collapsed
+     * to exactly 0px on focus. Had it recurred beneath the escape walk, an area-blind
+     * rule would have excused everything under it and reported the tile as clean.
+     */
+    const zeroHeight = ancestor({ clientWidth: 400, clientHeight: 0, scrollWidth: 900, scrollHeight: 500 });
+    expect(zeroHeight.scrollHeight).toBeGreaterThan(zeroHeight.clientHeight);
+    expect(exemptingAncestor([zeroHeight], false)).toBeNull();
+
+    const zeroWidth = ancestor({ clientWidth: 0, clientHeight: 60, scrollWidth: 900, scrollHeight: 500 });
+    expect(exemptingAncestor([zeroWidth], false)).toBeNull();
+
+    // Control, measured alongside them: the same box with both extents non-zero does
+    // contain, and must keep exempting. The rule has to reject zero area without
+    // rejecting small area.
+    expect(exemptingAncestor([
+      ancestor({ clientWidth: 400, clientHeight: 60, scrollWidth: 900, scrollHeight: 500 })
+    ], false)).not.toBeNull();
+  });
+
   test("an out-of-flow box is only excused by a scroller that holds its containing block", () => {
     const unrelated = [ancestor()];
     expect(exemptingAncestor(unrelated, true)).toBeNull();
