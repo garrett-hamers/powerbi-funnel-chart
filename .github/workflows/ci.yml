@@ -71,6 +71,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Small-tile layout probe
         run: npm run layout-probe
+      # Renders the three submission scenes from the packaged bundle and asserts each
+      # one actually drew what it claims to show. --verify keeps this a content gate
+      # rather than a pixel gate: it never writes into assets/screenshots, so the
+      # runner's font stack can differ from a developer's without churning committed
+      # bytes. The same harness and headless browser already run above in the layout
+      # probe, so nothing new has to work for this step to be reliable.
+      - name: Verify screenshot scene content
+        run: npm run screenshots:verify
       - name: Upload packaged visual
         uses: actions/upload-artifact@v4
         with:

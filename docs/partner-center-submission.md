@@ -160,10 +160,50 @@ They are real renders of the packaged bundle, not mock-ups:
    byte-identical to `dist/visual.js`; the screenshots depict the artifact that is
    actually submitted.
 3. A headless Chromium-family browser captures each page at
-   `--window-size=1366,768 --force-device-scale-factor=1`.
-4. Every emitted PNG is decoded and checked for exact dimensions and byte size before it
-   is written to `assets/screenshots/`; an off-specification render fails the command
-   instead of being committed.
+   `--window-size=1366,768 --force-device-scale-factor=1`, and dumps the rendered DOM in
+   the same invocation so the content assertions below describe the very render the
+   screenshot shows rather than a second, separate one.
+4. Every emitted PNG is decoded and checked for exact dimensions and byte size, and the
+   dumped DOM is checked against the scene's own content expectation, before anything is
+   written to `assets/screenshots/`. An off-specification render, or one that does not
+   depict the scene it claims to, fails the command instead of being committed.
+
+Dimensions and byte size alone would pass an empty chart, a chart that failed to bind its
+data, and a chart whose content rendered outside the visible area, since all three are
+correctly sized PNGs under the cap. Inspecting the finished image cannot separate those
+from a correct render either — this funnel is a flat design whose correct renders carry
+only 261-330 distinct colours, so any colour or blankness floor loose enough to pass them
+would also pass a nearly-blank wrong render, and pixel-diffing against goldens breaks on
+every Chrome, font and rasteriser change. The assertion therefore has to be made at
+capture time, while it is still known what was supposed to be drawn.
+
+`scripts/screenshot-content-agent.js` runs inside the page and counts the elements the
+scene should contain and measures their boxes with `getBoundingClientRect()`.
+`scripts/screenshot-scene-expectations.cjs` holds one expectation per scene, deliberately
+different from the others because a single shared check would catch neither a missing
+segment nor missing diagnostics:
+
+- `01-conversion-funnel` — 6 stages all in the `value` state, drawn widths strictly
+  narrowing, 6 chart labels, exactly 1 overall-conversion metric with no group caption, a
+  Target figure on the stage rows, and no warnings panel.
+- `02-segment-comparison` — 8 bars, exactly 2 overall-conversion metrics naming North
+  America and EMEA, 4 chart labels and 4 stage rows per segment, and each segment
+  narrowing on its own rather than across the boundary.
+- `03-diagnostics` — the warnings panel present and naming the inferred-order,
+  blank-value and nonmonotonic findings, exactly one dashed `blank` state marker, no bar
+  drawn for the blank stage, the later stage visibly increasing, and no Target caption
+  since no Target role is bound.
+
+Presence alone is not enough, because the failure this guards against is an element that
+sits in the DOM the entire time it is broken while rendering at zero visible height. So
+every region that has to be visible is also measured and clipped against both the tile the
+host gave the visual and the captured frame, and the frame the probe measured against is
+cross-checked with the emitted PNG so a divergence fails loudly rather than turning the
+geometry rules into nonsense. A scene that fails its expectations is never written, and its
+stale file is removed rather than left in place while the run reports success.
+
+`npm run screenshots:verify` runs the whole gate without touching `assets/screenshots`,
+which is what CI executes.
 
 Set `CHROME_PATH` if Chrome, Edge, or Chromium is not in a default install location. No
 browser automation package is added to `package.json`, so `npm ci` and `npm audit` in CI
