@@ -20,6 +20,7 @@
       "assets/screenshots/02-segment-comparison.png",
       "assets/screenshots/03-diagnostics.png"
     ],
+    "captureRecord": "assets/screenshot-capture.json",
     "sampleData": [
       "assets/sample-data/atlyn-funnel-sample.csv",
       "assets/sample-data/atlyn-funnel-diagnostics-sample.csv",

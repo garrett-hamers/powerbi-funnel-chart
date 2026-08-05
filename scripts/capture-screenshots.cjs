@@ -27,7 +27,8 @@ const path = require("node:path");
 const { writeHarnessPages } = require("./screenshot-harness.cjs");
 const { readPngMetadata } = require("./png-utils.cjs");
 const { findBrowser, fileUrl, runHeadless, BROWSER_HINT } = require("./headless-browser.cjs");
-const { expectationFor, evaluateScene } = require("./screenshot-scene-expectations.cjs");
+const { expectationFor, evaluateScene, describeScene } = require("./screenshot-scene-expectations.cjs");
+const { RECORD_PATH, buildRecord, sha256Of } = require("./screenshot-capture-record.cjs");
 
 const root = path.resolve(__dirname, "..");
 const workDirectory = path.join(root, ".tmp", "screenshots");
@@ -192,7 +193,7 @@ const main = async () => {
       return;
     }
 
-    staged.push({ page, stagedPath, metadata });
+    staged.push({ page, stagedPath, metadata, report, expectation });
     process.stdout.write(
       `  ${page.id}.png ${metadata.width}x${metadata.height} ${metadata.bytes} bytes ` +
       `- ${summarise(report)}\n`
@@ -230,11 +231,58 @@ const main = async () => {
 
   // Publishing happens only once every scene has passed, so a single broken scene can
   // never leave a half-updated set behind.
-  staged.forEach(({ page, stagedPath, metadata }) => {
+  const recordedScenes = staged.map(({ page, stagedPath, metadata, report, expectation }) => {
     const finalPath = path.join(outputDirectory, `${page.id}.png`);
     fs.copyFileSync(stagedPath, finalPath);
     process.stdout.write(`  wrote ${path.relative(root, finalPath)} (${metadata.bytes} bytes)\n`);
+    return {
+      ...describeScene(expectation, report),
+      screenshot: {
+        path: path.relative(root, finalPath).split(path.sep).join("/"),
+        /*
+         * Hashes the bytes that were just written, so the record vouches for exactly
+         * the file that the assertions above were applied to.
+         *
+         * This pins committed bytes. It is NOT a golden image and must never become
+         * one: browser renders are not bit-stable, and this repository's own CI proves
+         * it loudly — the identical scenes render 55-58% larger on the Linux runner
+         * than on Windows purely because the font stack differs, while every content
+         * assertion passes identically on both. A re-render comparison here would fail
+         * constantly for reasons that have nothing to do with correctness.
+         */
+        sha256: sha256Of(fs.readFileSync(finalPath)),
+        bytes: metadata.bytes,
+        width: metadata.width,
+        height: metadata.height
+      }
+    };
   });
+
+  const bundle = pages[0].bundle;
+  if (!bundle.packageSha256) {
+    fail(
+      "the harness did not render the packaged artifact, so there is no build to record; " +
+      "screenshots must depict the .pbiviz the customer receives"
+    );
+  }
+  const recordPath = path.join(root, RECORD_PATH);
+  fs.writeFileSync(
+    recordPath,
+    `${JSON.stringify(
+      buildRecord({
+        bundle,
+        viewport: { width: pages[0].viewport.width, height: pages[0].viewport.height },
+        scenes: recordedScenes
+      }),
+      null,
+      2
+    )}\n`
+  );
+  const assertionCount = recordedScenes.reduce((total, scene) => total + scene.assertions.length, 0);
+  process.stdout.write(
+    `  wrote ${RECORD_PATH} (${assertionCount} recorded assertion(s) across ` +
+    `${recordedScenes.length} scene(s), rendered from ${bundle.packageName} ${bundle.packageSha256})\n`
+  );
 
   process.stdout.write("Screenshot capture completed.\n");
 };

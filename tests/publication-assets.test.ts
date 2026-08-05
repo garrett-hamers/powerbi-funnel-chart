@@ -31,6 +31,7 @@ interface PublicationConfig {
     logo: string;
     sampleReportProject: string;
     screenshots: string[];
+    captureRecord: string;
     sampleData: string[];
   };
   sampleReport: { required: boolean; provided: boolean; reason: string };
@@ -247,6 +248,27 @@ describe("Partner Center media assets", () => {
     // Presence alone is not enough: the failure mode this guards against was an
     // element that sat in the DOM the entire time it rendered at zero height.
     expect(agent).toContain("getBoundingClientRect");
+  });
+
+  test("the capture writes a committed record so its assertions can be re-verified", () => {
+    // Assertions that run at capture and then print to stdout prove a screenshot was
+    // correct when written, and nothing more: the evidence is gone by the time anyone
+    // reviews the repository. The record is what makes the claim durable.
+    expect(fs.existsSync("scripts/screenshot-capture-record.cjs")).toBe(true);
+    expect(fs.existsSync("assets/screenshot-capture.json")).toBe(true);
+    expect(publication.assets.captureRecord).toBe("assets/screenshot-capture.json");
+
+    const capture = fs.readFileSync("scripts/capture-screenshots.cjs", "utf8");
+    expect(capture).toContain("screenshot-capture-record.cjs");
+    expect(capture).toContain("buildRecord");
+    // The record has to be written from the bytes the capture just wrote.
+    expect(capture).toContain("sha256Of");
+
+    // The audit is what re-derives the hashes; without this wiring the record would be
+    // recorded and never checked, which is the failure this whole change exists to fix.
+    const audit = fs.readFileSync("scripts/certification-audit.cjs", "utf8");
+    expect(audit).toContain("auditCaptureRecord");
+    expect(audit).toContain("packageSha256");
   });
 
   test("every screenshot scene declares its own content expectation", () => {

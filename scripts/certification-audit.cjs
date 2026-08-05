@@ -3,6 +3,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { readPngContentProfile } = require("./png-utils.cjs");
 const { inspectSampleReport } = require("./sample-report-utils.cjs");
+const { readRecord, auditCaptureRecord, RECORD_PATH } = require("./screenshot-capture-record.cjs");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) =>
@@ -228,6 +229,46 @@ screenshotPaths.forEach((relativePath, index) => {
     failures.push(`unable to validate ${relativePath}: ${error.message}`);
   }
 });
+
+/*
+ * The capture-time content assertions prove a screenshot was right when it was written,
+ * and then that proof is gone. A screenshot that is hand-edited, reverted, or swapped
+ * afterwards passes every other gate here, because the rest only measure dimensions and
+ * byte size. So the committed record is re-derived from the working tree: the SHA-256 of
+ * every screenshot, and the SHA-256 of the packaged visual those pixels were rendered
+ * from. A stale screenshot is a submission asset that misrepresents the product to every
+ * customer who reads the listing, so a mismatch fails rather than warns.
+ */
+const captureRecord = readRecord(root);
+const declaredScenes = (() => {
+  try {
+    return readJson("assets/sample-data/screenshot-scenarios.json").scenarios.map((scene) => scene.id);
+  } catch (error) {
+    failures.push(`unable to read the declared screenshot scenes: ${error.message}`);
+    return [];
+  }
+})();
+const currentPackage = artifacts.length === 1
+  ? {
+    name: artifacts[0],
+    sha256: crypto
+      .createHash("sha256")
+      .update(fs.readFileSync(path.join(root, "dist", artifacts[0])))
+      .digest("hex")
+  }
+  : null;
+auditCaptureRecord({
+  root,
+  record: captureRecord,
+  sceneIds: declaredScenes,
+  screenshotPaths,
+  packageSha256: currentPackage?.sha256,
+  packageName: currentPackage?.name
+}).forEach((failure) => failures.push(failure));
+requireCondition(
+  publication.assets?.captureRecord === RECORD_PATH,
+  `publication.json must declare ${RECORD_PATH} as a tracked submission asset`
+);
 
 const requireTrackedDocument = (relativePath, recorded, requiredText) => {
   const absolutePath = path.join(root, relativePath);

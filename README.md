@@ -124,6 +124,35 @@ its stale file is removed rather than left behind reporting success.
 which is how CI gates scene content without turning a runner's font stack into committed
 byte churn.
 
+### The committed record
+
+Assertions that run at capture and then print to stdout prove each file was correct *when
+written*, and then the evidence is gone. A screenshot that is hand-edited, reverted, or
+swapped afterwards passes every remaining gate, because the only surviving checks are its
+dimensions and its byte size. So the capture commits what it measured, to
+`assets/screenshot-capture.json`:
+
+- **The measured values**, not a pass or fail — bar counts and drawn widths, per-segment
+  label and row counts, the rendered text of every summary metric and diagnostic, and each
+  region's measured width and height. `"funnelNarrows:1": [420, 245, 102.22, 42.13, 20.41,
+  9.36]` is reviewable months later; "assertions passed" is not.
+- **The SHA-256 of each PNG the capture wrote**, so a screenshot cannot change without the
+  capture that vouches for it being re-run.
+- **The SHA-256 of the packaged `.pbiviz` those pixels were rendered from**, so screenshots
+  captured from an earlier build cannot sit next to a later one. The version string is far
+  too coarse for this: packaged bytes move more than once inside a single version.
+
+`npm run certification-audit` re-derives all three from the working tree and **fails**, not
+warns. It also rejects a record that vouches for nothing — an entry with no assertions, an
+assertion with no measured value, or a measured value that does not satisfy the expectation
+recorded beside it.
+
+These hashes pin the committed bytes the assertions were applied to. They are **not** a
+golden image and must never become a re-render comparison: browser renders are not
+bit-stable, and this repository's own CI makes the point loudly, rendering the same three
+scenes 55-58% larger on the Linux runner than on Windows purely because the font stack
+differs, while every content assertion passes identically on both.
+
 ## Small-tile layout probe
 
 Power BI gives a custom visual a fixed box and clips whatever does not fit, so a layout

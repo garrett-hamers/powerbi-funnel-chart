@@ -607,4 +607,171 @@ const expectationFor = (sceneId) => {
   return expectation;
 };
 
-module.exports = { SCENE_EXPECTATIONS, REGION_RULES, expectationFor, evaluateScene };
+/*
+ * Turns a scene's measurements into the values that get committed alongside the
+ * screenshot.
+ *
+ * evaluateScene answers "did this pass", which is worth nothing once the run ends: a
+ * screenshot that is hand-edited, reverted, or swapped afterwards still satisfies every
+ * remaining gate. What survives has to be the measured values themselves, because "the
+ * funnel drew six stages narrowing from 420px to 9px with an overall conversion of
+ * 2.2%" can be reviewed months later and "assertions passed" cannot.
+ *
+ * Every entry in `assertions` corresponds to a rule evaluateScene actually applies, and
+ * carries both what the scene declared and what was measured. `observations` holds the
+ * measured context that has no single declared value. A record whose assertions are
+ * empty, or whose measured values are absent, is refused elsewhere: an entry that
+ * vouches for nothing looks exactly like coverage.
+ */
+const describeScene = (expectation, report) => {
+  const assertions = [];
+  const assert = (name, expected, measured) => {
+    assertions.push({ name, expected, measured });
+  };
+
+  const bars = report.bars ?? [];
+  const markers = report.markers ?? [];
+  const labels = report.chartLabels ?? [];
+  const metrics = report.summaryMetrics ?? [];
+  const buttons = report.stageButtons ?? [];
+  const diagnostics = report.warnings ?? [];
+
+  assert("renderState", "ready", report.renderState);
+  assert("bars", expectation.bars, bars.length);
+  assert("barStates", expectation.barStates, countStates(bars));
+  assert(
+    "barsWithDrawnWidth",
+    expectation.barsWithWidth,
+    bars.filter((entry) => entry.drawnWidth > 0).length
+  );
+  assert("stateMarkers", expectation.stateMarkers, markers.length);
+  // Only recorded when the scene actually expects a marker state: an empty map on both
+  // sides asserts nothing, and stateMarkers above already pins the count.
+  if (Object.keys(expectation.markerStates ?? {}).length > 0) {
+    assert("markerStates", expectation.markerStates, countStates(markers));
+  }
+  assert("chartLabels", expectation.chartLabels, labels.length);
+  assert("summaryMetrics", expectation.summaryMetrics, metrics.length);
+  assert("summaryIntake", expectation.summaryIntake, (report.summaryIntake ?? []).length);
+  assert("stageRows", expectation.stageButtons, buttons.length);
+  assert(
+    "visibleStageRows",
+    { atLeast: expectation.minVisibleStageButtons },
+    buttons.filter((button) => fullyInside(button.inStageList) && fullyInside(button.inPage)).length
+  );
+  assert("tableRows", expectation.tableRows, report.tableRows);
+
+  if (typeof expectation.warningItems === "number") {
+    assert("diagnostics", expectation.warningItems, diagnostics.length);
+  }
+  if (typeof expectation.minWarningItems === "number") {
+    assert("diagnostics", { atLeast: expectation.minWarningItems }, diagnostics.length);
+  }
+  (expectation.warningsMustContain ?? []).forEach((needle) => {
+    assert(`diagnosticMentions:${needle}`, { atLeast: 1 }, countContaining(diagnostics, needle));
+  });
+
+  // The load-bearing assertion for a comparison scene: losing one segment leaves a
+  // perfectly healthy funnel behind, so the per-segment counts are what prove the
+  // screenshot still shows the comparison it advertises.
+  Object.keys(expectation.labelGroupCounts ?? {}).forEach((group) => {
+    assert(`chartLabelsInSegment:${group}`, expectation.labelGroupCounts[group], countContaining(labels, group));
+  });
+  Object.keys(expectation.stageButtonGroupCounts ?? {}).forEach((group) => {
+    assert(
+      `stageRowsInSegment:${group}`,
+      expectation.stageButtonGroupCounts[group],
+      countContaining(buttons, group)
+    );
+  });
+
+  (expectation.zeroWidthBarIndexes ?? []).forEach((index) => {
+    assert(`blankStageDrawsNoBar:${index + 1}`, 0, bars[index]?.drawnWidth ?? null);
+  });
+  (expectation.monotonicRuns ?? []).forEach((run, position) => {
+    assert(
+      `funnelNarrows:${position + 1}`,
+      { strictlyDecreasingAcrossStages: run.map((index) => index + 1) },
+      run.map((index) => bars[index]?.drawnWidth ?? null)
+    );
+  });
+  (expectation.increasingBarPairs ?? []).forEach(([lower, higher]) => {
+    assert(
+      `stageIncreases:${lower + 1}->${higher + 1}`,
+      { greaterThanPreviousStage: true },
+      { from: bars[lower]?.drawnWidth ?? null, to: bars[higher]?.drawnWidth ?? null }
+    );
+  });
+
+  (expectation.stageButtonsMustContain ?? []).forEach((needle) => {
+    assert(`stageRowMentions:${needle}`, { atLeast: 1 }, countContaining(buttons, needle));
+  });
+  (expectation.stageButtonsMustNotContain ?? []).forEach((needle) => {
+    assert(`stageRowOmits:${needle}`, 0, countContaining(buttons, needle));
+  });
+  (expectation.summaryMustContain ?? []).forEach((needle) => {
+    assert(`summaryMentions:${needle}`, { atLeast: 1 }, countContaining(metrics, needle));
+  });
+  (expectation.summaryMustNotContain ?? []).forEach((needle) => {
+    assert(`summaryOmits:${needle}`, 0, countContaining(metrics, needle));
+  });
+
+  // Region geometry, not just presence: the failure worth recording is a region that
+  // sat in the DOM the whole time it rendered at zero visible height.
+  expectation.requiredRegions.forEach((name) => {
+    const measured = report.regions?.[name] ?? null;
+    const rule = REGION_RULES[name];
+    assert(
+      `region:${name}`,
+      {
+        visible: true,
+        atLeast: `${rule.minWidth}x${rule.minHeight}`,
+        // The chart canvas legitimately overflows the tile because it scrolls inside
+        // .atlyn-chart-scroll, so the record carries which regions containment is
+        // actually required for rather than assuming it applies to every one of them.
+        insideTile: rule.withinMount === true
+      },
+      measured
+        ? {
+          width: measured.box.width,
+          height: measured.box.height,
+          visible: measured.display !== "none" &&
+            measured.visibility !== "hidden" &&
+            Number(measured.opacity) !== 0,
+          insideTile: fullyInside(measured.inMount),
+          insideFrame: fullyInside(measured.inPage)
+        }
+        : null
+    );
+  });
+  (expectation.forbiddenRegions ?? []).forEach((name) => {
+    assert(`regionAbsent:${name}`, { rendered: false }, { rendered: Boolean(report.regions?.[name]) });
+  });
+
+  return {
+    id: expectation.id,
+    demonstrates: expectation.demonstrates,
+    frame: report.page ?? null,
+    visual: report.mountBox
+      ? { width: report.mountBox.width, height: report.mountBox.height }
+      : null,
+    assertions,
+    observations: {
+      barDrawnWidths: bars.map((entry) => entry.drawnWidth),
+      barStates: bars.map((entry) => entry.state),
+      chartLabelText: labels.map((label) => label.text),
+      summaryMetricText: metrics.map((metric) => metric.text),
+      summaryIntakeText: (report.summaryIntake ?? []).map((intake) => intake.text),
+      diagnosticText: diagnostics.map((item) => item.text),
+      stageRowText: buttons.map((button) => button.text)
+    }
+  };
+};
+
+module.exports = {
+  SCENE_EXPECTATIONS,
+  REGION_RULES,
+  expectationFor,
+  evaluateScene,
+  describeScene
+};

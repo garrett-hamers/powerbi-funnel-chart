@@ -4,6 +4,28 @@ All notable changes to Atlyn Funnel are documented here.
 
 ## Unreleased
 
+- The screenshot capture now commits what it measured, to
+  `assets/screenshot-capture.json`. The capture-time assertions added alongside it prove
+  each screenshot was correct at the moment it was written and then print that proof to
+  stdout, where it is immediately lost: a screenshot that is hand-edited, reverted, or
+  swapped afterwards still passes every remaining gate, because the only surviving checks
+  are its dimensions and its byte size. The record holds, per scene, the measured values
+  themselves rather than a pass or fail — bar counts and drawn widths, per-segment label
+  and row counts, the rendered text of every summary metric and diagnostic, and each
+  region's measured width and height — plus the SHA-256 of the PNG the capture wrote and
+  the SHA-256 of the packaged `.pbiviz` those pixels were rendered from.
+  `npm run certification-audit` re-derives all three from the working tree and fails
+  rather than warns. The build hash is the load-bearing one: a screenshot captured from
+  an earlier build and committed beside a later one misrepresents the product to every
+  customer who reads the listing, and recording the version string instead would not
+  catch it, because the packaged bytes move more than once inside a single version. The
+  audit also refuses a record that vouches for nothing: an entry with no assertions, an
+  assertion with no measured value, or a measured value that does not satisfy the
+  expectation recorded beside it. The recorded hashes pin the committed bytes the
+  assertions were applied to and must never become a re-render comparison, because
+  browser renders are not bit-stable — the same three scenes render 55-58% larger on the
+  Linux CI runner than on Windows while every content assertion passes identically.
+
 - The screenshot capture now asserts what each scene actually drew, so a screenshot
   cannot be written unless the scene it claims to show really rendered. Previously
   `scripts/capture-screenshots.cjs` checked only that each PNG was exactly 1366x768 and
