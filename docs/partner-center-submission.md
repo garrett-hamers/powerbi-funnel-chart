@@ -147,15 +147,18 @@ not exactly 20x20 with real, non-uniform content.
 
 ### How the screenshots were produced
 
-They are real renders of the built bundle, not mock-ups:
+They are real renders of the packaged bundle, not mock-ups:
 
-1. `npm run build` compiles `src/visual.ts` into `dist/visual.js` and `dist/visual.css`.
+1. `npm run build` compiles `src/visual.ts`, and `npm run package` produces
+   `dist/atlynFunnelA1B2C3D4.1.0.1.0.pbiviz`.
 2. `npm run screenshots` (`scripts/capture-screenshots.cjs`) generates one offline HTML
-   harness per scenario in `.tmp/screenshots/`. The harness inlines the built bundle and
-   stylesheet, attaches a shadow root the way the Power BI host does, supplies a mock
-   `IVisualHost`, and calls `Visual.update()` with the literal data in
-   `assets/sample-data/screenshot-scenarios.json`. The harness makes no network
-   requests.
+   harness per scenario in `.tmp/screenshots/`. The harness reads the JS and CSS out of
+   `dist/*.pbiviz` and inlines them, attaches a shadow root the way the Power BI host
+   does, supplies a mock `IVisualHost`, and calls the packaged visual plugin with the
+   literal data in `assets/sample-data/screenshot-scenarios.json`. The harness makes no
+   network requests. `pbiviz package` runs its own build, so the packaged bundle is not
+   byte-identical to `dist/visual.js`; the screenshots depict the artifact that is
+   actually submitted.
 3. A headless Chromium-family browser captures each page at
    `--window-size=1366,768 --force-device-scale-factor=1`.
 4. Every emitted PNG is decoded and checked for exact dimensions and byte size before it
@@ -165,6 +168,29 @@ They are real renders of the built bundle, not mock-ups:
 Set `CHROME_PATH` if Chrome, Edge, or Chromium is not in a default install location. No
 browser automation package is added to `package.json`, so `npm ci` and `npm audit` in CI
 are unaffected.
+
+### How small-tile behaviour is verified
+
+Power BI hands a custom visual a fixed box and clips whatever does not fit, so a layout
+whose regions cannot shrink loses the chart silently as the tile narrows. A test that
+asserts the packaged stylesheet is non-empty passes on a completely broken layout, so this
+repository measures instead.
+
+`npm run layout-probe` (`scripts/layout-probe.cjs`) loads the same packaged bytes into the
+same shadow-root harness and reads real geometry back with `getBoundingClientRect()` at
+1280x620, 398x298, 258x198, 178x138 and 160x80 — the smallest size the stylesheet supports
+— plus diagnostics, right-to-left, high-contrast and reduced-motion cases. It fails the
+build when a box escapes the tile without a scrollable ancestor, when a region collapses or
+hides content behind `overflow: hidden` with no route to it, when the funnel is pushed out
+of view, when `text-overflow: ellipsis` is declared without `white-space: nowrap`, or when
+keyboard focus, selection state, reduced motion, high contrast or RTL regress. CI runs it
+on every push.
+
+As the tile shrinks the visual drops chrome before data, in order: the heading that
+repeats the tile title Power BI already renders, the intake figure, the verbose stage
+sentence, the duplicate stage list, and finally the chart labels. The funnel stages, the
+overall conversion metric and the data-quality diagnostics are never dropped, and every
+figure that leaves the screen stays in the accessible table and in the accessible names.
 
 ## 4. Sample report — built as a PBIP project, one Desktop save from `.pbix`
 

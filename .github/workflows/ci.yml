@@ -47,9 +47,14 @@ jobs:
           name="$(basename "$artifact")"
           sha="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
           bytes="$(stat -c %s "$artifact")"
+          css="$(node -e '
+            const { readPackagedBundle } = require("./scripts/packaged-bundle.cjs");
+            readPackagedBundle().then((bundle) => process.stdout.write(String(bundle.cssBytes)));
+          ')"
           echo "Packaged $name"
           echo "  SHA-256: $sha"
           echo "  bytes:   $bytes"
+          echo "  css:     $css"
           {
             echo "### Packaged visual"
             echo
@@ -58,11 +63,14 @@ jobs:
             echo "| Filename | \`$name\` |"
             echo "| SHA-256 | \`$sha\` |"
             echo "| Bytes | \`$bytes\` |"
+            echo "| Packaged CSS bytes | \`$css\` |"
             echo
             echo "This SHA-256 is of the \`.pbiviz\` itself. The downloadable artifact is a"
             echo "zip wrapper added by \`actions/upload-artifact\`, so hash the extracted file"
             echo "rather than the download."
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Small-tile layout probe
+        run: npm run layout-probe
       - name: Upload packaged visual
         uses: actions/upload-artifact@v4
         with:

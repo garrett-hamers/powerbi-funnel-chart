@@ -2,6 +2,52 @@
 
 All notable changes to Atlyn Funnel are documented here.
 
+## Unreleased
+
+- Fixed a small-tile layout defect that hid the funnel itself. The visual root stacked
+  its regions with a `min-height: 80px` / `min-width: 160px` floor and no way to shrink,
+  so as a tile narrowed the chrome above the chart wrapped onto more lines and pushed the
+  funnel below the fold. Measured against the packaged bytes at 258x198, 745px of content
+  was stacked into a 198px tile and the stage list was entirely out of view; at 160x80 the
+  content grew to 1016px and **the funnel chart was 0% visible**. The root is now a flex
+  column, every stacked region carries `min-height: 0`, and the size floors are gone. At
+  every probed size the root content now equals the tile exactly and the chart is 100%
+  visible without scrolling.
+- Chrome now degrades before data. `data-narrow`, `data-short` and `data-tiny` are set
+  from the host viewport — not from a media query, which sees the report page rather than
+  the tile — and drop, in order: the heading that repeats the tile title Power BI already
+  renders, the intake figure that is the funnel's first bar, the six-clause stage sentence
+  (shortened; the accessible name keeps every figure), the duplicate stage list, and
+  finally the chart labels. The funnel stages, the conversion metric and the data-quality
+  diagnostics are never dropped.
+- The chart canvas now tracks the real tile width. Its `viewBox` was pinned to a minimum
+  of 320px, so on any tile narrower than that the browser scaled the whole drawing down —
+  to 46% at 160px wide — shrinking every label below legibility instead of drawing a
+  smaller funnel. Row height and the label gutter now adapt to the tile, and labels are
+  truncated to the space that exists rather than overflowing it.
+- Fixed keyboard focus loss on every re-render. Power BI mounts custom visuals in a shadow
+  root, where `document.activeElement` resolves to the shadow host, so the visual never
+  recognised its own focused control and dropped focus on every update. Focus now resolves
+  through shadow roots, and arrow-key navigation falls back to the chart bars on tiles
+  where the stage list has been dropped.
+- Fixed right-to-left chart labels. `text-anchor` resolves against the inline base
+  direction, so anchoring `start` at the left gutter hung every RTL label off the canvas.
+- Added `npm run layout-probe`: it extracts the JS and CSS that ship inside
+  `dist/*.pbiviz`, mounts them in a shadow root in an offline harness with a mock
+  `IVisualHost`, and measures real geometry with `getBoundingClientRect()` across nine
+  cases — five tile sizes down to the declared minimum, plus diagnostics, RTL, high
+  contrast and reduced motion. It fails the build when a box escapes the tile without a
+  scrollable ancestor, when a region collapses or clips content unreachably, when the
+  funnel is pushed out of view, when `text-overflow: ellipsis` is declared without
+  `white-space: nowrap`, or when focus, selection, reduced motion, high contrast or RTL
+  regress. Asserting that `content.css` is non-empty passes on a broken layout; only
+  measured boxes catch it. CI runs the probe and now also reports the packaged CSS byte
+  count alongside the package hash.
+- The screenshot harness and the layout probe both load the bytes from `dist/*.pbiviz`
+  rather than `dist/visual.js`. `pbiviz package` runs its own build, so the two are not
+  identical, and a listing screenshot must depict the artifact the customer receives. The
+  committed 1366x768 screenshots were re-captured from the fixed build.
+
 ## 1.0.1.0 - 2026-08-04
 
 - Bumped the visual version from `1.0.0.0` to `1.0.1.0` (`pbiviz.json` →
