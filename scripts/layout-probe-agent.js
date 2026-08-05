@@ -766,7 +766,8 @@
     var focusRegion = shadow.querySelector(".atlyn-accessible-table");
     if (focusRegion) {
       var beforeChart = shadow.querySelector(".atlyn-chart-scroll");
-      var beforeChartHeight = beforeChart ? boxOf(beforeChart).height : null;
+      var beforeChartBox = beforeChart ? boxOf(beforeChart) : null;
+      var beforeChartHeight = beforeChartBox ? beforeChartBox.height : null;
       var beforeStageList = shadow.querySelector(".atlyn-stage-list");
       var beforeStageHeight = beforeStageList ? boxOf(beforeStageList).height : null;
       var rootScrollBefore = funnel ? funnel.scrollTop : 0;
@@ -812,6 +813,15 @@
           : null,
         chartHeightBefore: beforeChartHeight,
         chartHeightAfter: afterChart ? boxOf(afterChart).height : null,
+        /*
+         * The width was already being measured on both sides and discarded. Recording it
+         * costs nothing and makes "did opening the table cost the funnel?" answerable on
+         * both axes instead of arguable on one. Whether a width collapse is reachable
+         * depends on the stylesheet - it is not, while the root is a column flex - but a
+         * rule that can only ever see one axis cannot report that it did not look.
+         */
+        chartWidthBefore: beforeChartBox ? beforeChartBox.width : null,
+        chartWidthAfter: afterChart ? boxOf(afterChart).width : null,
         stageListHeightBefore: beforeStageHeight,
         stageListHeightAfter: afterStageList ? boxOf(afterStageList).height : null,
         rootScrolledBy: round((funnel ? funnel.scrollTop : 0) - rootScrollBefore),

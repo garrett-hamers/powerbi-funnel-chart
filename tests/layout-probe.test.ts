@@ -114,6 +114,8 @@ const cleanReport = (): Record<string, unknown> => ({
     },
     chartHeightBefore: 160,
     chartHeightAfter: 77,
+    chartWidthBefore: 246,
+    chartWidthAfter: 246,
     stageListHeightBefore: null,
     stageListHeightAfter: null,
     rootScrolledBy: 0,
@@ -442,6 +444,23 @@ describe("scroll-time and focus-time assertions", () => {
     const shrunk = cleanReport();
     focusState(shrunk).chartHeightAfter = 12;
     expect(rules(shrunk)).toContain("focus-shrinks-chart");
+  });
+
+  test("catches the funnel being destroyed horizontally, which the height rule cannot see", () => {
+    /*
+     * The same defect on the axis the rule never measured. A column flex cannot squeeze a
+     * sibling horizontally, so this is not reachable in the current stylesheet - but the
+     * height-only version could not have reported that it had not looked, and the width
+     * was already being measured on both sides and discarded.
+     *
+     * A chart at full height and zero width is exactly as gone as one at zero height. The
+     * rule's own message says "the data is gone while the chrome remains", which is true
+     * of both.
+     */
+    const flattened = cleanReport();
+    focusState(flattened).chartWidthAfter = 0;
+    expect(focusState(flattened).chartHeightAfter).toBeGreaterThan(4);
+    expect(rules(flattened)).toContain("focus-destroys-chart");
   });
 
   test("catches an accessible table that nothing bounds", () => {
