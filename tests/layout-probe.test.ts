@@ -385,6 +385,35 @@ describe("scroll-time and focus-time assertions", () => {
     expect(rules(report)).toContain("scroll-region-not-reswept");
   });
 
+  test("every rule the probe can report has been observed to fire", () => {
+    /*
+     * "An assertion you have not seen fail is not proven" was the standard applied to the
+     * screenshot expectations when they were written. The probe never got it: 42 rules
+     * are defined here and three had never been asserted by any test, so nothing
+     * distinguished them from a rule that could not fire at all.
+     *
+     * That distinction is not hypothetical in this file. `scrollsBetween()` was once
+     * structurally dead - it treated any `overflow: auto` ancestor as containment, and
+     * the root declares exactly that, so no escape could ever be reported. The probe read
+     * as clean because the rule was incapable of speaking, and 37 real defects were
+     * hidden behind it.
+     *
+     * These three are reachable. Now demonstrated rather than assumed.
+     */
+    const noChart = cleanReport();
+    (noChart.regions as Record<string, unknown>).chartScroll = null;
+    expect(rules(noChart)).toContain("chart-missing");
+
+    const noPositioning = cleanReport();
+    delete noPositioning.positioning;
+    expect(rules(noPositioning)).toContain("positioning");
+
+    const refusedFocus = cleanReport();
+    refusedFocus.focusChecks = (refusedFocus.focusChecks as Array<Record<string, unknown>>)
+      .map((check) => ({ ...check, focused: false }));
+    expect(rules(refusedFocus)).toContain("focus-lost");
+  });
+
   test("catches a probe that never scrolled anything, and a region that refused to", () => {
     const missing = cleanReport();
     delete missing.scrollSweep;
