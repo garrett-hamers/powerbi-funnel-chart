@@ -309,6 +309,21 @@ const checkBars = (expectation, report, findings) => {
         `stage ${index + 1} bar rendered ${bar.box.width}x${bar.box.height}px, so nothing is visible`
       ));
     }
+    /*
+     * `drawnWidth` is the SVG attribute - a declaration. The box is what was painted.
+     * Measured: a rect with width="420" inside a scaled ancestor renders 0x20 while its
+     * attribute still reads 420, which satisfies both the drawn-count rule and the
+     * height floor. A bar that claims a value and paints none of it is a wrong render,
+     * so the two have to agree.
+     */
+    if (bar.drawnWidth > EPSILON && bar.box.width < bar.drawnWidth - 1) {
+      findings.push(finding(
+        scene,
+        "bar-not-painted",
+        `stage ${index + 1} declares a ${bar.drawnWidth}px bar but painted ` +
+        `${bar.box.width}x${bar.box.height}px, so the value it encodes is not on screen`
+      ));
+    }
     if (!fullyInside(bar.inChart)) {
       findings.push(finding(
         scene,
@@ -548,7 +563,13 @@ const checkWarnings = (expectation, report, findings) => {
     }
   });
   items.forEach((item) => {
-    if (item.box.height < 4) {
+    /*
+     * Both extents, not height alone. Measured: a diagnostic row collapsed to zero width
+     * inside a healthy panel renders 0x192 rather than 0x0, because the text wraps one
+     * character per line. A height floor therefore gets *more* satisfied as this failure
+     * gets worse, which is the one direction a threshold must never move.
+     */
+    if (item.box.width < 1 || item.box.height < 4) {
       findings.push(finding(
         scene,
         "diagnostics-collapsed",
