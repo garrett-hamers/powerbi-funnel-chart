@@ -29,8 +29,21 @@ behavior changes and explain any host API assumptions. Do not describe local
 tests as Microsoft certification or live-host validation.
 
 When a pull request mentions an issue it is **not** resolving, reference it as a
-bare `#123`. GitHub's linked-issue parser matches the keyword and ignores the
-sentence around it, so `does not fix #123` and `this does not close #123` both
-close the issue on merge — the wording written to prevent the misreading is the
-wording that causes it. This has already closed a live defect report here, one
-second after the merge that said it was leaving it open.
+bare number with no verb in front of it. GitHub's linked-issue parser matches the
+keyword and ignores the sentence around it, so a phrase of the form
+`does not fix #NNN` closes the issue on merge — the wording written to prevent
+the misreading is the wording that causes it.
+
+Two details that are easy to get wrong, both learned by getting them wrong here:
+
+- **The commit message is the surface that matters**, not only the pull request
+  body. A squash merge scans the commit message, so a body that references issues
+  carefully does not help if the message does not.
+- **Quoting is not escaping.** The phrase cannot be reproduced safely even inside
+  an explanation of why it is dangerous. Quotation marks, backticks and
+  surrounding prose are all invisible to the parser — which is why the paragraph
+  above uses a placeholder rather than an example.
+
+This has closed a live defect report in this repository twice: once by a pull
+request that said it was leaving the issue open, and once by the pull request
+that documented the first occurrence.
