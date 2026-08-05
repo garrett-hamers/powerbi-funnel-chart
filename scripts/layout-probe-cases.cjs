@@ -211,7 +211,7 @@ const evaluateScrollSweep = (scenario, report, findings) => {
           `${container.element} would not scroll to ${offset.requested}px (settled at ${offset.applied}px)`
         ));
       }
-      (offset.escapes ?? []).forEach((escape) => {
+      unexcusedEscapes(offset.escapes).forEach((escape) => {
         findings.push(finding(
           scenario,
           "escapes-root-when-scrolled",
@@ -382,7 +382,7 @@ const evaluateFocusState = (scenario, report, findings) => {
       `with the accessible table open the visual root hides ${focusState.rootHiddenY}px of content`
     ));
   }
-  (focusState.escapes ?? []).forEach((escape) => {
+  unexcusedEscapes(focusState.escapes).forEach((escape) => {
     findings.push(finding(
       scenario,
       "escapes-root-when-focused",
@@ -405,6 +405,54 @@ const evaluateFocusState = (scenario, report, findings) => {
    */
   evaluatePositionedBoxes(scenario, focusState.positioned, "with the accessible table open, ", findings);
 };
+
+/*
+ * Which ancestor, if any, legitimately excuses a box from having left the tile.
+ *
+ * This used to be decided in-page, inside the escape walk, which made it untestable and
+ * concealed a wrong predicate: it asked whether an ancestor *declared* a scrolling
+ * overflow when the question is whether that ancestor actually clips. Those come apart,
+ * and the divergence is measurable:
+ *
+ *   display: table  + overflow: auto  ->  computed overflow-y: visible   (already safe)
+ *   display: inline + overflow: auto  ->  computed overflow-y: auto, client box 0x0
+ *
+ * The table case is handled for free by reading the computed value rather than the
+ * declaration, which is why nothing here was ever wrong in practice. The inline case is
+ * not: it computes as a scroller, has no principal box, clips nothing, and would have
+ * exempted every box beneath it.
+ *
+ * The tempting stronger test — require scrollHeight > clientHeight — is wrong. A scroll
+ * container whose content currently fits still clips, so demanding scroll geometry would
+ * start reporting escapes that are genuinely contained.
+ */
+const exemptingAncestor = (chain, outOfFlow) => {
+  const entries = Array.isArray(chain) ? chain : [];
+  for (const entry of entries) {
+    const scrolls = /(auto|scroll)/.test(entry?.overflowX ?? "") ||
+      /(auto|scroll)/.test(entry?.overflowY ?? "");
+    if (!scrolls) {
+      continue;
+    }
+    // No client area means no scroll box, whatever the overflow computes to.
+    if (!(entry.clientWidth > 0 || entry.clientHeight > 0)) {
+      continue;
+    }
+    /*
+     * An in-flow box is contained by any clipping ancestor. An out-of-flow box is only
+     * contained by one that is, or encloses, its containing block: otherwise it is
+     * positioned against something further up and the scroller can neither clip it nor
+     * scroll to it.
+     */
+    if (!outOfFlow || entry.isContainingBlock || entry.containsContainingBlock) {
+      return entry;
+    }
+  }
+  return null;
+};
+
+const unexcusedEscapes = (escapes) =>
+  (escapes ?? []).filter((escape) => !exemptingAncestor(escape.chain, escape.outOfFlow));
 
 const suppression = (scenario, rule, reason, detail) => ({
   scenario: typeof scenario === "string" ? scenario : scenario.id,
@@ -475,7 +523,7 @@ const evaluateReport = (scenario, report) => {
     findings.push(finding(scenario, "render", `renderingFinished never fired (${report.renderState ?? "none"}) ${report.renderError ?? ""}`));
   }
 
-  (report.escapes ?? []).forEach((escape) => {
+  unexcusedEscapes(report.escapes).forEach((escape) => {
     findings.push(finding(
       scenario,
       "escapes-root",
@@ -629,6 +677,8 @@ module.exports = {
   buildProbeScenarios,
   evaluateReport,
   collectSuppressions,
+  exemptingAncestor,
+  unexcusedEscapes,
   evaluatePositioning,
   evaluateScrollSweep,
   evaluateFocusState

@@ -75,24 +75,23 @@
    * itself declares `overflow: auto`, every element had such an ancestor, so no escape
    * could ever be reported.
    */
+  /*
+   * Retained only for the informational `insideScroller` field on focus checks. It uses
+   * the same corrected predicate as exemptingAncestor() in
+   * scripts/layout-probe-cases.cjs — a declared overflow is not a scroll box unless the
+   * element actually has a client area — so the two cannot report different answers.
+   */
   var scrollsBetween = function (element, stopAt) {
-    var elementStyle = getComputedStyle(element);
-    var outOfFlow = elementStyle.position === "absolute" || elementStyle.position === "fixed";
-    var containingBlock = outOfFlow ? containingBlockElementOf(element) : null;
-    var node = parentOf(element);
-    while (node && node !== stopAt) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        var style = getComputedStyle(node);
-        if (/(auto|scroll)/.test(style.overflowX) || /(auto|scroll)/.test(style.overflowY)) {
-          if (!outOfFlow) {
-            return describe(node);
-          }
-          if (containingBlock && (containingBlock === node || node.contains(containingBlock))) {
-            return describe(node);
-          }
-        }
+    var measured = ancestorChainOf(element, stopAt);
+    for (var index = 0; index < measured.chain.length; index += 1) {
+      var entry = measured.chain[index];
+      var scrolls = /(auto|scroll)/.test(entry.overflowX) || /(auto|scroll)/.test(entry.overflowY);
+      if (!scrolls || (entry.clientWidth <= 0 && entry.clientHeight <= 0)) {
+        continue;
       }
-      node = parentOf(node);
+      if (!measured.outOfFlow || entry.isContainingBlock || entry.containsContainingBlock) {
+        return entry.element;
+      }
     }
     return null;
   };
@@ -136,6 +135,64 @@
     };
     visit(mount);
     return found;
+  };
+
+  /*
+   * The measured ancestor chain between an element and the visual root.
+   *
+   * The escape walk used to decide containment in-page, which made the decision
+   * untestable and hid a wrong predicate: it asked whether an ancestor *declared* a
+   * scrolling overflow, when the question is whether that ancestor actually clips. Those
+   * come apart. A `display: table` box declaring `overflow: auto` computes to `visible`,
+   * so reading the computed value already handles that case — but a non-replaced inline
+   * box computes `overflow: auto` while having no principal box at all, reports a 0x0
+   * client area, and clips nothing. Measured here, decided in
+   * scripts/layout-probe-cases.cjs, so the rule can be driven by a test.
+   */
+  var ancestorChainOf = function (element, stopAt) {
+    var elementStyle = getComputedStyle(element);
+    var outOfFlow = elementStyle.position === "absolute" || elementStyle.position === "fixed";
+    var containingBlock = outOfFlow ? containingBlockElementOf(element) : null;
+    var chain = [];
+    var node = parentOf(element);
+    while (node && node !== stopAt) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        var style = getComputedStyle(node);
+        chain.push({
+          element: describe(node),
+          overflowX: style.overflowX,
+          overflowY: style.overflowY,
+          display: style.display,
+          // A box with no client area has no scroll box and cannot clip, however its
+          // overflow computes.
+          clientWidth: node.clientWidth,
+          clientHeight: node.clientHeight,
+          isContainingBlock: Boolean(containingBlock) && node === containingBlock,
+          containsContainingBlock: Boolean(containingBlock) && node.contains(containingBlock)
+        });
+      }
+      node = parentOf(node);
+    }
+    return { outOfFlow: outOfFlow, chain: chain };
+  };
+
+  var escapeOf = function (element, frame) {
+    var box = boxOf(element);
+    var overLeft = round(frame.left - box.left);
+    var overTop = round(frame.top - box.top);
+    var overRight = round(box.right - frame.right);
+    var overBottom = round(box.bottom - frame.bottom);
+    if (overLeft <= EPSILON && overTop <= EPSILON && overRight <= EPSILON && overBottom <= EPSILON) {
+      return null;
+    }
+    return {
+      element: describe(element),
+      box: box,
+      overflowLeft: Math.max(0, overLeft),
+      overflowTop: Math.max(0, overTop),
+      overflowRight: Math.max(0, overRight),
+      overflowBottom: Math.max(0, overBottom)
+    };
   };
 
   var REGION_SELECTORS = {
@@ -203,7 +260,6 @@
         return;
       }
       var box = boxOf(element);
-      var scroller = scrollsBetween(element, mount);
 
       if (/(auto|scroll)/.test(style.overflowX) || /(auto|scroll)/.test(style.overflowY)) {
         scrollContainers.push({
@@ -217,21 +273,18 @@
         });
       }
 
-      if (!scroller) {
-        var overLeft = round(rootBox.left - box.left);
-        var overTop = round(rootBox.top - box.top);
-        var overRight = round(box.right - rootBox.right);
-        var overBottom = round(box.bottom - rootBox.bottom);
-        if (overLeft > EPSILON || overTop > EPSILON || overRight > EPSILON || overBottom > EPSILON) {
-          escapes.push({
-            element: describe(element),
-            box: box,
-            overflowLeft: Math.max(0, overLeft),
-            overflowTop: Math.max(0, overTop),
-            overflowRight: Math.max(0, overRight),
-            overflowBottom: Math.max(0, overBottom)
-          });
-        }
+      /*
+       * Geometry first, containment second. The walk records every box that has left
+       * the tile along with the measured chain that might excuse it, and the rules
+       * module decides. Deciding here is what previously let a wrong predicate silently
+       * exempt boxes and report nothing.
+       */
+      var escape = escapeOf(element, rootBox);
+      if (escape) {
+        var chain = ancestorChainOf(element, mount);
+        escape.outOfFlow = chain.outOfFlow;
+        escape.chain = chain.chain;
+        escapes.push(escape);
       }
 
       var hasContent = Boolean((element.textContent || "").trim()) ||
@@ -517,23 +570,12 @@
         if (style.display === "none" || style.visibility === "hidden") {
           return;
         }
-        if (scrollsBetween(element, mount)) {
-          return;
-        }
-        var box = boxOf(element);
-        var overLeft = round(liveRoot.left - box.left);
-        var overTop = round(liveRoot.top - box.top);
-        var overRight = round(box.right - liveRoot.right);
-        var overBottom = round(box.bottom - liveRoot.bottom);
-        if (overLeft > EPSILON || overTop > EPSILON || overRight > EPSILON || overBottom > EPSILON) {
-          found.push({
-            element: describe(element),
-            box: box,
-            overflowLeft: Math.max(0, overLeft),
-            overflowTop: Math.max(0, overTop),
-            overflowRight: Math.max(0, overRight),
-            overflowBottom: Math.max(0, overBottom)
-          });
+        var escape = escapeOf(element, liveRoot);
+        if (escape) {
+          var chain = ancestorChainOf(element, mount);
+          escape.outOfFlow = chain.outOfFlow;
+          escape.chain = chain.chain;
+          found.push(escape);
         }
       });
       return found;
