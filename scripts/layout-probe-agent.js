@@ -378,10 +378,24 @@
     // so a mis-anchored label disappears without tripping the escape rule.
     var svgBox = report.regions && report.regions.chart ? report.regions.chart.box : null;
     var labelEscapes = [];
+    var labelCollapses = [];
     var labels = shadow.querySelectorAll(".atlyn-chart-label");
     for (var labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
       var labelBox = boxOf(labels[labelIndex]);
       if (!svgBox || labelBox.width === 0) {
+        /*
+         * Recorded rather than silently skipped. A gate that drops a measurement makes
+         * the probe quieter as the visual gets worse, and a zero-width label is invisible
+         * whether or not it also escapes. The escape arithmetic genuinely does not apply
+         * to a box with no width, so it still does not run - but the skip is now
+         * reportable instead of invisible.
+         */
+        if (svgBox && (labels[labelIndex].textContent || "").trim() !== "") {
+          labelCollapses.push({
+            text: (labels[labelIndex].textContent || "").slice(0, 40),
+            box: labelBox
+          });
+        }
         continue;
       }
       var lost = Math.max(
@@ -398,6 +412,7 @@
       }
     }
     report.chartLabelEscapes = labelEscapes;
+    report.chartLabelCollapses = labelCollapses;
     report.chartLabelCount = labels.length;
 
     report.media = {

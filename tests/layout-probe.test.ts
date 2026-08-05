@@ -39,6 +39,7 @@ const cleanReport = (): Record<string, unknown> => ({
   clipped: [],
   ellipsisWithoutNowrap: [],
   chartLabelEscapes: [],
+  chartLabelCollapses: [],
   scrollContainers: [
     {
       element: "div.atlyn-funnel",
@@ -234,6 +235,25 @@ describe("layout probe assertions", () => {
     const report = cleanReport();
     report.chartLabelEscapes = [{ text: "Website visits", box: { left: -40 }, lostPx: 46 }];
     expect(rules(report)).toContain("chart-label-clipped");
+  });
+
+  test("catches a chart label that carries text but renders zero wide", () => {
+    /*
+     * The escape rule above cannot see this one: the agent must skip a zero-width label
+     * because the escape arithmetic needs a width, and that skip used to be silent. So
+     * this defect had no rule anywhere in the probe, and the screenshot pipeline only
+     * renders 1366x768 - a label collapsing at a small tile was invisible to both
+     * instruments.
+     *
+     * Measured 0 across all nine probe scenarios on the current build, so the rule is
+     * defensive rather than a false positive waiting to fire.
+     */
+    const report = cleanReport();
+    report.chartLabelCollapses = [{
+      text: "Website visits",
+      box: { width: 0, height: 14, left: 40, top: 20, right: 40, bottom: 34 }
+    }];
+    expect(rules(report)).toContain("chart-label-collapsed");
   });
 
   test("catches focus that is lost across a re-render", () => {
