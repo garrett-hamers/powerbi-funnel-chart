@@ -355,6 +355,47 @@ describe("screenshot content assertions", () => {
     })).toContain("diagnostics-collapsed");
   });
 
+  test("catches a diagnostic that rendered at zero width, which makes it taller", () => {
+    /*
+     * Measured in headless Chrome: a diagnostic row whose box collapses to zero width
+     * inside a healthy-width panel does not shrink, it *wraps*.
+     *
+     *   healthy row              300x16
+     *   width: 0 row               0x192
+     *   collapsed flex child       0x192
+     *
+     * So a height floor is not merely incomplete here - the failure moves the measured
+     * value 12x further from the threshold, and the check gets more confident as the
+     * render gets worse. Only requiring both extents catches it, which is what the chart
+     * label and stage row rules already do.
+     */
+    expect(rulesFor("03-diagnostics", (report) => {
+      report.warnings = (report.warnings as Array<{ text: string }>).map((item) => ({
+        ...item,
+        box: boxOf(42, 104, 0, 192)
+      }));
+    })).toContain("diagnostics-collapsed");
+  });
+
+  test("catches a bar that declares a width but paints nothing", () => {
+    /*
+     * Measured in headless Chrome: a rect with width="420" inside an element scaled to
+     * zero renders a 0x20 box while its attribute still reads 420.
+     *
+     *   normal rect        declared 420   box 420x20
+     *   scaleX(0) rect     declared 420   box   0x20   <- passes bars-not-drawn AND bar-collapsed
+     *
+     * `barsWithWidth` counts the SVG attribute, which is a declaration; `bar-collapsed`
+     * checks height only. So a bar can claim the value it is supposed to make visible and
+     * paint none of it while satisfying every existing bar rule. The bar is the datum
+     * here, so its declared and rendered widths have to agree.
+     */
+    expect(rulesFor("01-conversion-funnel", (report) => {
+      const bar = bars(report)[2] as { box: Box; drawnWidth: number };
+      bar.box = boxOf(bar.box.left, bar.box.top, 0, 20);
+    })).toContain("bar-not-painted");
+  });
+
   test("catches a funnel that stopped narrowing", () => {
     expect(rulesFor("01-conversion-funnel", (report) => {
       bars(report)[3].drawnWidth = 900;
