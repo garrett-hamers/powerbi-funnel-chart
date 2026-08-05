@@ -4,6 +4,42 @@ All notable changes to Atlyn Funnel are documented here.
 
 ## Unreleased
 
+- Fixed the accessible data table destroying the funnel when a keyboard user focused it.
+  The table carried its own `overflow: auto`, `max-height` and `1px` sizing — all of
+  which browsers ignore on a `display: table` box. It therefore laid out at its full
+  content size at every tile (428x288, never 1px), was absolutely positioned against the
+  initial containing block because the root computed `position: static`, and hung up to
+  274x213px outside the declared 160x80 minimum tile, clipped from view only by the
+  deprecated `clip`. On `:focus-visible` it entered the flow and, being a table, refused
+  to shrink, so every pixel of shrinkage landed on `.atlyn-chart-scroll`
+  (`flex: 1 1 auto; min-height: 0`), which collapsed to **exactly 0px at every short
+  tile**: the funnel vanished and only the table remained, itself cut off mid-row. The
+  visual root scrolled by 30-50px in the process, hiding 56-244px of its own content.
+  The table now sits inside a real `overflow: auto` wrapper `<div>`, where both
+  properties behave as declared; the root is `position: relative` so any positioned
+  descendant resolves inside the tile rather than against the report page; and below
+  220x180 the table stays screen-reader-only instead of opening into a space too small
+  to read, because a region that is visible but empty is worse than one that is honestly
+  hidden. Measured after the fix: a real scroll container exists at every tile, the
+  funnel keeps 40-221px, the root scrolls 0px and hides 0px, and all six table rows
+  remain. The three screenshots are byte-identical, so the resting layout is unchanged.
+- The layout probe now measures the states it previously never entered. It only ever
+  looked at the visual at rest, with nothing scrolled and nothing focused, which is the
+  state a defect is least likely to show in — the defect above was invisible to it, and
+  the one root scroll it did record was discarded by a rule that required the element to
+  have been fully visible beforehand, which it never was. The probe now scrolls every
+  scrollable region to top, middle and maximum and re-runs the escape walk at each
+  offset; enters the focused state and asserts that the opened region is bounded by a
+  real scroll container, that the funnel survives, and that the root neither scrolls nor
+  overflows; and reports the root's computed `position` alongside every absolutely
+  positioned, fixed or sticky box with the containing block it actually resolves
+  against. A region declared to overflow that stops overflowing is reported rather than
+  skipped, because a fixture that quietly stops overflowing makes every assertion below
+  it pass vacuously. Sticky rules are included although this visual has no sticky
+  elements, and refuse to compare stacking order unless `position: sticky` is computed,
+  since `getComputedStyle().zIndex` returns the specified value even on an unpositioned
+  element. Every new rule was confirmed to fire: reverting the fix produces 39 measured
+  defects across five rules, and the fixed build measures none.
 - The screenshot capture now commits what it measured, to
   `assets/screenshot-capture.json`. The capture-time assertions added alongside it prove
   each screenshot was correct at the moment it was written and then print that proof to

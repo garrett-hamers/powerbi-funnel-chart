@@ -19,6 +19,11 @@ const NARROW_WIDTH = 320;
 const SHORT_HEIGHT = 260;
 const TINY_WIDTH = 200;
 const TINY_HEIGHT = 150;
+// Below this the opened table would leave the funnel only a few unreadable pixels, so
+// it stays screen-reader-only instead. Derived from measurement: at 178x138 opening the
+// table leaves the chart 45px, and at 160x80 only 13px.
+const TABLE_MIN_WIDTH = 220;
+const TABLE_MIN_HEIGHT = 180;
 const LABEL_CHAR_WIDTH = 6.2;
 
 /**
@@ -40,6 +45,7 @@ export interface FunnelLayout {
   showIntake: boolean;
   showStageList: boolean;
   verboseStageText: boolean;
+  expandTableOnFocus: boolean;
 }
 
 export const resolveLayout = (width: number, height: number): FunnelLayout => {
@@ -56,7 +62,15 @@ export const resolveLayout = (width: number, height: number): FunnelLayout => {
     showTitle: !narrow && !short,
     showIntake: !narrow && !short,
     showStageList: !narrow && !short,
-    verboseStageText: width >= 480 && height >= 320
+    verboseStageText: width >= 480 && height >= 320,
+    /*
+     * On a tile this small there is no room to open the table without squeezing the
+     * funnel down to a few unreadable pixels. A region that is visible but empty is
+     * worse than one that is honestly hidden, so below this size the table stays
+     * screen-reader-only: it keeps its roles, labels and rows, and simply never takes
+     * visual space.
+     */
+    expandTableOnFocus: width >= TABLE_MIN_WIDTH && height >= TABLE_MIN_HEIGHT
   };
 };
 
@@ -216,6 +230,7 @@ export class Visual implements IVisual {
     this.setStateAttribute("data-narrow", this.layout.narrow);
     this.setStateAttribute("data-short", this.layout.short);
     this.setStateAttribute("data-tiny", this.layout.tiny);
+    this.setStateAttribute("data-table-expands", this.layout.expandTableOnFocus);
     this.root.style.width = `${Math.max(0, width)}px`;
     this.root.style.height = `${Math.max(0, height)}px`;
     this.root.removeAttribute("data-state");
@@ -472,12 +487,34 @@ export class Visual implements IVisual {
     return list;
   }
 
-  private createAccessibleTable(): HTMLTableElement {
+  private createAccessibleTable(): HTMLDivElement {
+    /*
+     * The table lives inside a wrapper div, and the wrapper — not the table — carries
+     * the visually-hidden box and the scrolling.
+     *
+     * `overflow` and `max-height` are ignored on a `display: table` box, so declaring
+     * them on the <table> creates no scroll container at all: the box simply grows to
+     * its content and pushes everything else out of the tile. A <table> also treats
+     * `width`/`height` as minimums, so a 1px "visually hidden" table is never actually
+     * 1px. Both properties do exactly what they say on a block container, so the
+     * wrapper is the thing that gets sized and scrolled.
+     */
+    const wrapper = document.createElement("div");
+    wrapper.className = "atlyn-accessible-table-scroll";
     const table = document.createElement("table");
     table.className = "atlyn-accessible-table";
     table.setAttribute("role", "table");
     table.setAttribute("aria-label", this.localizer.text("tableLabel"));
-    table.setAttribute("tabindex", "0");
+    /*
+     * Only a tab stop where it can actually be shown. On a tile too small to open the
+     * table the wrapper stays clipped, so a focused table would draw no visible ring
+     * anywhere — a tab stop a sighted keyboard user cannot see. The table stays in the
+     * accessibility tree with its role, label and rows either way, so assistive
+     * technology still reaches every figure through structural navigation.
+     */
+    if (this.layout.expandTableOnFocus) {
+      table.setAttribute("tabindex", "0");
+    }
     const headers = [
       this.localizer.text("stage"),
       this.getDisplayName("Role_Value_DisplayNameKey", this.localizer.text("value")),
@@ -519,7 +556,8 @@ export class Visual implements IVisual {
       body.appendChild(row);
     });
     table.appendChild(body);
-    return table;
+    wrapper.appendChild(table);
+    return wrapper;
   }
 
   private navigateStage(index: number, event: KeyboardEvent): void {

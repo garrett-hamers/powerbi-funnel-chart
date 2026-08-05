@@ -26,6 +26,13 @@
   min-width: 0;
   overflow: auto;
   padding: 10px;
+  /*
+   * Establishes the containing block for absolutely positioned descendants. Without it
+   * the root computes `static`, so an absolutely positioned child resolves against the
+   * initial containing block: it belongs to the report page rather than to the tile,
+   * and this root's overflow cannot clip it however large it grows.
+   */
+  position: relative;
   overscroll-behavior: contain;
   touch-action: pan-y;
 }
@@ -207,14 +214,59 @@
   outline-offset: 1px;
 }
 
-.atlyn-accessible-table {
-  border-collapse: collapse;
-  clip: rect(0 0 0 0);
+/*
+ * The wrapper, not the table, carries the visually-hidden box and the scrolling.
+ *
+ * `overflow` and `max-height` are ignored on a `display: table` box, so declaring them
+ * on the <table> produced no scroll container at all — the box grew to its content and
+ * pushed the funnel out of the tile. A <table> also treats `width`/`height` as
+ * minimums, so the old 1px "visually hidden" table was never 1px: it laid out at full
+ * size at every tile, hidden only by the deprecated `clip`, and positioned against the
+ * initial containing block because the root computes `position: static`. Both
+ * properties behave normally on this block container, so the wrapper is what gets
+ * sized, clipped and scrolled.
+ */
+.atlyn-accessible-table-scroll {
+  /* clip-path replaces the deprecated clip, and unlike clip it needs no positioning. */
+  clip-path: inset(50%);
   height: 1px;
-  margin: -1px;
+  margin: 0;
+  min-height: 0;
   overflow: hidden;
+  padding: 0;
+  /*
+   * Out of flow at rest so the hidden table costs the funnel no space, and safely so:
+   * the root is `position: relative`, which makes it this box's containing block, so
+   * the root's overflow really does clip it.
+   */
   position: absolute;
   width: 1px;
+}
+
+/*
+ * Opening on focus is capped so the funnel cannot be squeezed away. Without a cap the
+ * table refuses to shrink — a table's height is a minimum — so every pixel of shrinkage
+ * lands on the chart, which has min-height: 0 and duly collapses to nothing.
+ */
+.atlyn-funnel[data-table-expands="true"] .atlyn-accessible-table-scroll:focus-within {
+  clip-path: none;
+  flex: 0 1 auto;
+  height: auto;
+  max-height: 45%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: static;
+  width: 100%;
+}
+
+.atlyn-accessible-table {
+  border-collapse: collapse;
+}
+
+.atlyn-accessible-table-scroll:focus-within .atlyn-accessible-table {
+  outline: 2px solid var(--atlyn-primary);
+  outline-offset: -2px;
 }
 
 .atlyn-accessible-table td,
@@ -233,18 +285,6 @@
 
 .atlyn-funnel[data-state="error"] .atlyn-empty {
   color: var(--atlyn-warning);
-}
-
-.atlyn-accessible-table:focus-visible {
-  clip: auto;
-  flex: 0 1 auto;
-  height: auto;
-  margin: 0;
-  min-height: 0;
-  outline: 2px solid var(--atlyn-primary);
-  overflow: auto;
-  position: static;
-  width: 100%;
 }
 
 .atlyn-funnel[data-compact="true"] {

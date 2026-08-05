@@ -43,13 +43,53 @@
     return node.host || null;
   };
 
+  var containingBlockElementOf = function (element) {
+    var node = parentOf(element);
+    while (node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        var style = getComputedStyle(node);
+        if (
+          style.position !== "static" ||
+          (style.transform && style.transform !== "none") ||
+          (style.filter && style.filter !== "none") ||
+          (style.perspective && style.perspective !== "none") ||
+          (style.contain && /paint|layout|strict|content/.test(style.contain))
+        ) {
+          return node;
+        }
+      }
+      node = node.nodeType === 11 ? node.host : parentOf(node);
+    }
+    // The initial containing block: nothing inside the visual contains this box.
+    return null;
+  };
+
+  /*
+   * The nearest ancestor that genuinely scrolls this element into reach.
+   *
+   * DOM ancestry alone is not containment. A scroll container only clips an
+   * out-of-flow box when that box's containing block is the scroller or lives inside
+   * it; otherwise the box is positioned against something further up and the scroller
+   * neither clips it nor can scroll to it. Treating every ancestor scroller as
+   * containment made this walk blind to exactly that case — and since the visual root
+   * itself declares `overflow: auto`, every element had such an ancestor, so no escape
+   * could ever be reported.
+   */
   var scrollsBetween = function (element, stopAt) {
+    var elementStyle = getComputedStyle(element);
+    var outOfFlow = elementStyle.position === "absolute" || elementStyle.position === "fixed";
+    var containingBlock = outOfFlow ? containingBlockElementOf(element) : null;
     var node = parentOf(element);
     while (node && node !== stopAt) {
       if (node.nodeType === Node.ELEMENT_NODE) {
         var style = getComputedStyle(node);
         if (/(auto|scroll)/.test(style.overflowX) || /(auto|scroll)/.test(style.overflowY)) {
-          return describe(node);
+          if (!outOfFlow) {
+            return describe(node);
+          }
+          if (containingBlock && (containingBlock === node || node.contains(containingBlock))) {
+            return describe(node);
+          }
         }
       }
       node = parentOf(node);
@@ -63,6 +103,39 @@
     for (var index = 0; index < children.length; index += 1) {
       walk(children[index], visit);
     }
+  };
+
+  /*
+   * Sticky elements, measured wherever the page currently is.
+   *
+   * The computed position is carried alongside the offset because a sticky rule that
+   * has been dropped, or overridden to static, still reports a z-index: comparing
+   * stacking order without checking that the element is positioned reads an order out
+   * of a context that does not exist. There is nothing sticky in this visual today, so
+   * this returns an empty list; the rules exist so that stops being true silently.
+   */
+  var stickyOffsets = function (mount) {
+    var found = [];
+    var visit = function (element) {
+      var style = getComputedStyle(element);
+      if (style.position === "sticky") {
+        var rect = element.getBoundingClientRect();
+        found.push({
+          element: element.tagName.toLowerCase() +
+            (element.getAttribute("class") ? "." + String(element.getAttribute("class")).trim().split(/\s+/).join(".") : ""),
+          computedPosition: style.position,
+          zIndexSpecified: style.zIndex,
+          top: Math.round(rect.top * 100) / 100,
+          height: Math.round(rect.height * 100) / 100
+        });
+      }
+      var children = element.children || [];
+      for (var index = 0; index < children.length; index += 1) {
+        visit(children[index]);
+      }
+    };
+    visit(mount);
+    return found;
   };
 
   var REGION_SELECTORS = {
@@ -111,7 +184,8 @@
         if (
           node.nodeType === Node.ELEMENT_NODE &&
           node.classList &&
-          node.classList.contains("atlyn-accessible-table")
+          (node.classList.contains("atlyn-accessible-table") ||
+            node.classList.contains("atlyn-accessible-table-scroll"))
         ) {
           return true;
         }
@@ -204,6 +278,7 @@
     report.clipped = clipped;
     report.ellipsisWithoutNowrap = ellipsisWithoutNowrap;
     report.scrollContainers = scrollContainers;
+
 
     var visibleFraction = function (box) {
       var width = Math.max(0, Math.min(box.right, rootBox.right) - Math.max(box.left, rootBox.left));
@@ -342,7 +417,10 @@
       }
     }
     var accessibleTable = shadow.querySelector(".atlyn-accessible-table");
-    if (accessibleTable) {
+    // Only a focus target where it is a tab stop: on a tile too small to open it the
+    // table is deliberately left out of the tab order, so demanding that it take focus
+    // would report the accessible choice as a defect.
+    if (accessibleTable && accessibleTable.hasAttribute("tabindex")) {
       focusTargets.push(accessibleTable);
     }
     var chartScroll = shadow.querySelector(".atlyn-chart-scroll");
@@ -414,6 +492,251 @@
       };
     } else {
       report.focusRestore = null;
+    }
+    /*
+     * Everything above is measured at rest, with nothing scrolled and nothing focused.
+     * That is only one of the states the visual is actually used in, and it is the one
+     * state where a defect is least likely to show: content scrolled past the fold, and
+     * content that only enters the flow on focus, are invisible to it.
+     *
+     * The three passes below enter those states deliberately.
+     */
+
+    // A cheap re-walk that answers only "does anything escape the tile from here",
+    // which is the assertion that has to hold in every state, not just at rest.
+    var escapesNow = function () {
+      var found = [];
+      // Recomputed on every call: focusing or scrolling shifts viewport-relative
+      // coordinates, so a root box captured earlier would make every box look displaced.
+      var liveRoot = boxOf(mount);
+      walk(mount, function (element) {
+        if (element === mount) {
+          return;
+        }
+        var style = getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden") {
+          return;
+        }
+        if (scrollsBetween(element, mount)) {
+          return;
+        }
+        var box = boxOf(element);
+        var overLeft = round(liveRoot.left - box.left);
+        var overTop = round(liveRoot.top - box.top);
+        var overRight = round(box.right - liveRoot.right);
+        var overBottom = round(box.bottom - liveRoot.bottom);
+        if (overLeft > EPSILON || overTop > EPSILON || overRight > EPSILON || overBottom > EPSILON) {
+          found.push({
+            element: describe(element),
+            box: box,
+            overflowLeft: Math.max(0, overLeft),
+            overflowTop: Math.max(0, overTop),
+            overflowRight: Math.max(0, overRight),
+            overflowBottom: Math.max(0, overBottom)
+          });
+        }
+      });
+      return found;
+    };
+
+    /*
+     * Pass 1: positioning triage.
+     *
+     * An absolutely positioned box whose containing block sits above the visual root
+     * belongs to the page, not to the tile, and the root's overflow does not clip it —
+     * so the escape walk's "is there a scrolling ancestor" test wrongly treats it as
+     * contained. z-index is recorded with the computed position beside it because
+     * getComputedStyle().zIndex returns the specified value regardless of whether the
+     * element is positioned at all, so a stacking order read without checking position
+     * describes a context that may not exist.
+     */
+    var establishesContainingBlock = function (element) {
+      if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+        return false;
+      }
+      var style = getComputedStyle(element);
+      if (style.position !== "static") {
+        return true;
+      }
+      if (style.transform && style.transform !== "none") {
+        return true;
+      }
+      if (style.filter && style.filter !== "none") {
+        return true;
+      }
+      if (style.perspective && style.perspective !== "none") {
+        return true;
+      }
+      if (style.contain && /paint|layout|strict|content/.test(style.contain)) {
+        return true;
+      }
+      return false;
+    };
+
+    var positioned = [];
+    walk(mount, function (element) {
+      if (element === mount) {
+        return;
+      }
+      var style = getComputedStyle(element);
+      if (style.position === "static" || style.position === "relative") {
+        return;
+      }
+      var node = parentOf(element);
+      var containingBlockElement = null;
+      while (node) {
+        if (node.nodeType === Node.ELEMENT_NODE && establishesContainingBlock(node)) {
+          containingBlockElement = node;
+          break;
+        }
+        node = node.nodeType === 11 ? node.host : parentOf(node);
+      }
+      positioned.push({
+        element: describe(element),
+        position: style.position,
+        zIndexSpecified: style.zIndex,
+        // Only meaningful when the element is positioned; recorded together so a rule
+        // can refuse to compare stacking order in a context that does not exist.
+        participatesInStacking: style.position !== "static",
+        containingBlock: containingBlockElement ? describe(containingBlockElement) : null,
+        /*
+         * The containing block has to be the visual root or something inside it. If it
+         * is not, the box belongs to the page: the root cannot clip it and the root's
+         * scrolling cannot move it, so the escape walk's "has a scrolling ancestor"
+         * test — true for in-flow boxes — wrongly treats it as contained.
+         */
+        containingBlockInsideRoot: Boolean(containingBlockElement) &&
+          (containingBlockElement === mount || mount.contains(containingBlockElement)),
+        box: boxOf(element)
+      });
+    });
+    report.positioning = {
+      rootPosition: getComputedStyle(mount).position,
+      funnelPosition: funnel ? getComputedStyle(funnel).position : null,
+      counts: {
+        sticky: positioned.filter(function (entry) { return entry.position === "sticky"; }).length,
+        fixed: positioned.filter(function (entry) { return entry.position === "fixed"; }).length,
+        absolute: positioned.filter(function (entry) { return entry.position === "absolute"; }).length
+      },
+      elements: positioned
+    };
+
+    /*
+     * Pass 2: scroll every scrollable region to top, middle and maximum, re-running the
+     * escape walk at each offset. A defect halfway down a scroll region is invisible at
+     * rest, and a region that quietly stops overflowing makes every scroll-time
+     * assertion pass vacuously, so the sweep records what it found rather than skipping.
+     */
+    var sweep = [];
+    scrollContainers.forEach(function (container) {
+      var element = null;
+      walk(mount, function (candidate) {
+        if (!element && describe(candidate) === container.element) {
+          element = candidate;
+        }
+      });
+      if (!element) {
+        return;
+      }
+      var maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+      var offsets = maxScrollTop > 0
+        ? [0, Math.round(maxScrollTop / 2), maxScrollTop]
+        : [0];
+      var measured = [];
+      offsets.forEach(function (offset) {
+        element.scrollTop = offset;
+        measured.push({
+          requested: offset,
+          applied: round(element.scrollTop),
+          escapes: escapesNow(),
+          stickyOffsets: stickyOffsets(mount)
+        });
+      });
+      element.scrollTop = 0;
+      sweep.push({
+        element: container.element,
+        overflows: maxScrollTop > 0,
+        maxScrollTop: maxScrollTop,
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        offsets: measured
+      });
+    });
+    report.scrollSweep = sweep;
+
+    /*
+     * Pass 3: the focused state.
+     *
+     * The accessible table only enters the flow on focus, so at rest every measurement
+     * looks perfect while the state a keyboard user actually reaches is unmeasured. The
+     * rule is the same one that governs the rest of the visual: degrade chrome, never
+     * data. Opening a table must not cost the funnel.
+     */
+    var focusRegion = shadow.querySelector(".atlyn-accessible-table");
+    if (focusRegion) {
+      var beforeChart = shadow.querySelector(".atlyn-chart-scroll");
+      var beforeChartHeight = beforeChart ? boxOf(beforeChart).height : null;
+      var beforeStageList = shadow.querySelector(".atlyn-stage-list");
+      var beforeStageHeight = beforeStageList ? boxOf(beforeStageList).height : null;
+      var rootScrollBefore = funnel ? funnel.scrollTop : 0;
+
+      focusRegion.focus();
+
+      var wrapper = shadow.querySelector(".atlyn-accessible-table-scroll");
+      var afterChart = shadow.querySelector(".atlyn-chart-scroll");
+      var afterStageList = shadow.querySelector(".atlyn-stage-list");
+      report.focusState = {
+        focusable: focusRegion.hasAttribute("tabindex"),
+        focused: shadow.activeElement === focusRegion,
+        expandsAttribute: funnel ? funnel.getAttribute("data-table-expands") : null,
+        tableBox: boxOf(focusRegion),
+        tableRows: shadow.querySelectorAll(".atlyn-accessible-table tbody tr").length,
+        // A <table> cannot be a scroll container: overflow and max-height are ignored on
+        // a display: table box. So the element that is supposed to scroll is measured
+        // directly rather than assumed to be scrolling.
+        scroller: wrapper
+          ? {
+            element: describe(wrapper),
+            display: getComputedStyle(wrapper).display,
+            overflowY: getComputedStyle(wrapper).overflowY,
+            clientHeight: wrapper.clientHeight,
+            scrollHeight: wrapper.scrollHeight,
+            isRealScrollContainer: wrapper.scrollHeight > wrapper.clientHeight + 1,
+            /*
+             * Whether it can actually be scrolled, proven by writing an offset and
+             * reading it back rather than inferred from scrollHeight and clientHeight.
+             * A box can report overflow and still refuse to scroll, and deriving the
+             * answer from the same two numbers that define overflow would only restate
+             * the question.
+             */
+            scrollProof: (function () {
+              var before = wrapper.scrollTop;
+              wrapper.scrollTop = 9999;
+              var reached = wrapper.scrollTop;
+              wrapper.scrollTop = before;
+              return { requested: 9999, reached: round(reached), moved: reached > 0 };
+            })(),
+            box: boxOf(wrapper)
+          }
+          : null,
+        chartHeightBefore: beforeChartHeight,
+        chartHeightAfter: afterChart ? boxOf(afterChart).height : null,
+        stageListHeightBefore: beforeStageHeight,
+        stageListHeightAfter: afterStageList ? boxOf(afterStageList).height : null,
+        rootScrolledBy: round((funnel ? funnel.scrollTop : 0) - rootScrollBefore),
+        rootHiddenY: funnel ? Math.max(0, funnel.scrollHeight - funnel.clientHeight) : 0,
+        escapes: escapesNow()
+      };
+      if (funnel) {
+        funnel.scrollTop = 0;
+        funnel.scrollLeft = 0;
+      }
+      focusRegion.blur();
+      // Focusing can scroll the document itself, which shifts every viewport-relative
+      // coordinate; restore it so nothing measured afterwards is offset.
+      window.scrollTo(0, 0);
+    } else {
+      report.focusState = null;
     }
   };
 
