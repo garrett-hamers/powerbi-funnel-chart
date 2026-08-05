@@ -373,6 +373,23 @@ const evaluateFocusState = (scenario, report, findings) => {
     }
   }
 
+  /*
+   * The same question on the other axis. A column flex cannot squeeze a sibling
+   * horizontally, so this is not reachable in the current stylesheet - but that is a fact
+   * about the CSS, not about the rule, and the height-only version could not have
+   * reported that it had not looked. The measurement was already being taken and thrown
+   * away; asserting it is what turns "no known mechanism" into "measured, and no".
+   */
+  if (focusState.chartWidthBefore !== null && focusState.chartWidthAfter !== null &&
+    focusState.chartWidthBefore > 4 && focusState.chartWidthAfter < 4) {
+    findings.push(finding(
+      scenario,
+      "focus-destroys-chart",
+      `focusing the accessible table collapsed the funnel from ${focusState.chartWidthBefore}px ` +
+      `to ${focusState.chartWidthAfter}px wide, so the data is gone while the chrome remains`
+    ));
+  }
+
   if (Math.abs(focusState.rootScrolledBy) > 1) {
     findings.push(finding(
       scenario,
