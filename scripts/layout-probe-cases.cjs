@@ -43,6 +43,48 @@ const DIAGNOSTIC_DATA = {
   target: null
 };
 
+/*
+ * A fixture built to overflow rather than to fit. Content that fits never scrolls, and
+ * a region that never scrolls hides every defect that only appears once it does, so a
+ * probe run only against fitting content can report a clean bill of health it has not
+ * earned. Twelve stages across six segments puts far more rows in every scrollable
+ * region than any tile can show.
+ */
+const OVERFLOW_STAGES = [
+  "Website visits",
+  "Product tour",
+  "Pricing viewed",
+  "Free trial started",
+  "Trial activated",
+  "Feature adopted",
+  "Qualified demo",
+  "Security review",
+  "Proposal sent",
+  "Negotiation",
+  "Contract sent",
+  "Closed won"
+];
+const OVERFLOW_GROUPS = ["North America", "EMEA", "APAC", "LATAM", "ANZ", "Japan"];
+
+const buildOverflowData = () => {
+  const stage = [];
+  const group = [];
+  const value = [];
+  const stageOrder = [];
+  const target = [];
+  OVERFLOW_GROUPS.forEach((segment, segmentIndex) => {
+    OVERFLOW_STAGES.forEach((label, stageIndex) => {
+      stage.push(label);
+      group.push(segment);
+      stageOrder.push(stageIndex + 1);
+      const seed = 120000 - segmentIndex * 9000;
+      value.push(Math.round(seed * Math.pow(0.78, stageIndex)));
+      target.push(Math.round(seed * Math.pow(0.8, stageIndex)));
+    });
+  });
+  return { stage, group, value, stageOrder, target };
+};
+
 const page = (viewport) => ({ width: viewport.width + 40, height: viewport.height + 40 });
 
 const buildProbeScenarios = () => {
@@ -93,6 +135,48 @@ const buildProbeScenarios = () => {
     visual: { width: xl.width, height: xl.height },
     page: page(xl),
     ...PROBE_DATA
+  });
+
+  // Overflowing fixtures. These exist to make regions actually scroll; expectOverflow
+  // makes the run fail loudly if they ever stop doing so, rather than quietly passing
+  // every scroll assertion by never scrolling.
+  const overflow = buildOverflowData();
+  scenarios.push({
+    id: "overflow-xl",
+    title: "1280x620 overflowing (72 rows)",
+    locale: "en-US",
+    expectOverflow: true,
+    visual: { width: xl.width, height: xl.height },
+    page: page(xl),
+    ...overflow
+  });
+  scenarios.push({
+    id: "overflow-md",
+    title: "398x298 overflowing (72 rows)",
+    locale: "en-US",
+    expectOverflow: true,
+    visual: { width: md.width, height: md.height },
+    page: page(md),
+    ...overflow
+  });
+  scenarios.push({
+    id: "overflow-sm",
+    title: "258x198 overflowing (72 rows)",
+    locale: "en-US",
+    expectOverflow: true,
+    visual: { width: sm.width, height: sm.height },
+    page: page(sm),
+    ...overflow
+  });
+  scenarios.push({
+    id: "overflow-rtl-md",
+    title: "398x298 overflowing right-to-left",
+    locale: "ar-SA",
+    expectDirection: "rtl",
+    expectOverflow: true,
+    visual: { width: md.width, height: md.height },
+    page: page(md),
+    ...overflow
   });
 
   return scenarios;
@@ -169,6 +253,94 @@ const evaluateReport = (scenario, report) => {
       `chart label "${entry.text}" hangs ${entry.lostPx}px outside the canvas and is clipped away`
     ));
   });
+
+  // An absolutely or fixed positioned element whose containing block sits outside the
+  // visual root resolves against the initial containing block, so the root's overflow
+  // cannot clip it and it only appears contained by luck. Relative and sticky elements
+  // stay in flow and are clipped normally, so they are not subject to this.
+  (report.positioned ?? []).forEach((entry) => {
+    if ((entry.position === "absolute" || entry.position === "fixed") && !entry.containingBlockInsideRoot) {
+      findings.push(finding(
+        scenario,
+        "containing-block-escapes-root",
+        `${entry.element} is position: ${entry.position} but resolves against ${entry.containingBlock}, ` +
+        `outside the visual root, so the root cannot clip or scroll it`
+      ));
+    }
+  });
+
+  // Content that fits never scrolls, and a region that never scrolls silently passes
+  // every scroll assertion. Fail loudly when a fixture built to overflow stops doing so.
+  if (scenario.expectOverflow && report.anyScrollable !== true) {
+    findings.push(finding(
+      scenario,
+      "fixture-not-overflowing",
+      "no region overflowed, so every scrolled measurement below was vacuous: " +
+      (report.scrollProbes ?? [])
+        .map((probe) => `${probe.element} scrollHeight ${probe.scrollHeight} vs clientHeight ${probe.clientHeight}`)
+        .join("; ")
+    ));
+  }
+
+  (report.scrollProbes ?? []).forEach((probe) => {
+    (probe.offsets ?? []).forEach((offset) => {
+      (offset.escapes ?? []).forEach((escape) => {
+        findings.push(finding(
+          scenario,
+          "escapes-root-scrolled",
+          `${escape.element} leaves the tile by ${escape.overflowPx}px once ${probe.element} ` +
+          `is scrolled to ${offset.scrollTop}px, with no scrollable ancestor`
+        ));
+      });
+      if (offset.stickyTops.length > 1 && (!offset.stickyStrictlyIncreasing || !offset.stickyAllDistinct)) {
+        findings.push(finding(
+          scenario,
+          "sticky-collapse",
+          `sticky offsets in ${probe.element} collapse at scrollTop ${offset.scrollTop}: ` +
+          `tops ${JSON.stringify(offset.stickyTops.map((entry) => entry.top))}`
+        ));
+      }
+      if (offset.absoluteAnchoredOutside > 0) {
+        findings.push(finding(
+          scenario,
+          "absolute-anchored-outside-scroller",
+          `${offset.absoluteAnchoredOutside} absolutely positioned child of ${probe.element} ` +
+          `did not move with the scroll (drift ${JSON.stringify(offset.absoluteDrift)} at scrollTop ${offset.scrollTop})`
+        ));
+      }
+    });
+  });
+
+  (report.focusedTableEscapes ?? []).forEach((escape) => {
+    findings.push(finding(
+      scenario,
+      "focused-table-escapes",
+      `${escape.element} leaves the tile by ${escape.overflowPx}px while the accessible table has focus`
+    ));
+  });
+
+  // Expanding the accessible table on focus may make the root scroll; that is fine.
+  // Being clipped away with no scroll route is not.
+  const reachable = report.focusedTableReachable;
+  if (reachable && reachable.shellScrollHeight > reachable.shellClientHeight + 1) {
+    if (!/(auto|scroll)/.test(reachable.shellOverflowY ?? "")) {
+      findings.push(finding(
+        scenario,
+        "focused-table-unreachable",
+        `the focused accessible table overflows its shell by ` +
+        `${reachable.shellScrollHeight - reachable.shellClientHeight}px with overflow-y: ${reachable.shellOverflowY}`
+      ));
+    }
+  }
+  if (reachable && reachable.rootScrollHeight > reachable.rootClientHeight + 1 &&
+    !/(auto|scroll)/.test(reachable.rootOverflowY ?? "")) {
+    findings.push(finding(
+      scenario,
+      "focused-table-unreachable",
+      `focusing the accessible table pushes the root ${reachable.rootScrollHeight - reachable.rootClientHeight}px ` +
+      `past its tile with overflow-y: ${reachable.rootOverflowY}`
+    ));
+  }
 
   const chart = report.regions?.chartScroll;
   if (!chart) {

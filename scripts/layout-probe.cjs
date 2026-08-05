@@ -69,8 +69,9 @@ const printTable = (rows) => {
     "Root hidden",
     "Escapes",
     "Chart visible",
-    "Chart box",
-    "Stage list",
+    "Scrollable",
+    "Scrolled escapes",
+    "Sticky",
     "Collapsed"
   ];
   const widths = headers.map((header, index) =>
@@ -109,9 +110,15 @@ const main = async () => {
     });
     reports.push({ scenario, report });
     const chart = report.regions?.chartScroll;
-    const stages = report.regions?.stageList;
     const scrollers = report.scrollContainers ?? [];
     const rootScroller = scrollers.find((entry) => entry.element.indexOf("atlyn-funnel") >= 0);
+    const probes = report.scrollProbes ?? [];
+    const scrollable = probes.filter((probe) => probe.verticallyScrollable || probe.horizontallyScrollable);
+    const scrolledEscapes = probes.reduce(
+      (total, probe) =>
+        total + (probe.offsets ?? []).reduce((count, offset) => count + (offset.escapes ?? []).length, 0),
+      0
+    );
     const tile = report.viewport ?? scenario.visual;
     rows.push([
       scenario.title,
@@ -120,8 +127,9 @@ const main = async () => {
       report.ok ? `${rootScroller ? rootScroller.hiddenY : 0}px` : "n/a",
       report.ok ? String((report.escapes ?? []).length) : "n/a",
       chart ? `${Math.round((chart.visibleFraction ?? 0) * 100)}%` : "-",
-      chart ? `${chart.box.height}px` : "-",
-      stages ? `${stages.box.height}px` : "dropped",
+      report.ok ? `${scrollable.length}/${probes.length}` : "n/a",
+      report.ok ? String(scrolledEscapes) : "n/a",
+      report.ok ? String(report.stickyCount ?? 0) : "n/a",
       report.ok ? String((report.collapsed ?? []).length) : "n/a"
     ]);
     findings.push(...evaluateReport(scenario, report));

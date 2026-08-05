@@ -186,6 +186,18 @@ of view, when `text-overflow: ellipsis` is declared without `white-space: nowrap
 keyboard focus, selection state, reduced motion, high contrast or RTL regress. CI runs it
 on every push.
 
+Small viewports and overflowing content are separate tests. Content that fits never
+scrolls, and a region that never scrolls passes every scroll assertion vacuously, so the
+probe also renders fixtures built to overflow — twelve stages across six segments, 72 rows
+— and scrolls each scrollable region to 0%, 25%, 50% and 100% before measuring again.
+Those scenarios are marked `expectOverflow` and the run fails loudly if they stop
+overflowing. The probe additionally records every non-static element with the containing
+block it resolves against and fails when an `absolute` or `fixed` element resolves outside
+the visual root, checks that sticky offsets stay strictly increasing and distinct after a
+scroll, and checks that absolutely positioned children move with their scroller. This
+visual declares no `position: sticky`, and the probe records that count rather than
+assuming it.
+
 As the tile shrinks the visual drops chrome before data, in order: the heading that
 repeats the tile title Power BI already renders, the intake figure, the verbose stage
 sentence, the duplicate stage list, and finally the chart labels. The funnel stages, the

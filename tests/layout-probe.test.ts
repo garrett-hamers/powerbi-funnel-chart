@@ -29,6 +29,66 @@ const cleanReport = (): Record<string, unknown> => ({
   clipped: [],
   ellipsisWithoutNowrap: [],
   chartLabelEscapes: [],
+  positioned: [
+    {
+      element: "div.atlyn-accessible-shell",
+      position: "absolute",
+      box: { width: 1, height: 1 },
+      containingBlock: "div.atlyn-funnel",
+      containingBlockInsideRoot: true
+    },
+    {
+      element: "div.atlyn-funnel",
+      position: "relative",
+      box: { width: 258, height: 198 },
+      containingBlock: "initial containing block",
+      containingBlockInsideRoot: false
+    }
+  ],
+  anyScrollable: true,
+  stickyCount: 0,
+  scrollProbes: [
+    {
+      element: "div.atlyn-chart-scroll",
+      scrollHeight: 1452,
+      clientHeight: 117,
+      scrollWidth: 246,
+      clientWidth: 246,
+      verticallyScrollable: true,
+      horizontallyScrollable: false,
+      offsets: [
+        {
+          scrollTop: 0,
+          scrollLeft: 0,
+          escapes: [],
+          stickyTops: [],
+          stickyStrictlyIncreasing: true,
+          stickyAllDistinct: true,
+          absoluteDrift: [],
+          absoluteAnchoredOutside: 0
+        },
+        {
+          scrollTop: 1335,
+          scrollLeft: 0,
+          escapes: [],
+          stickyTops: [],
+          stickyStrictlyIncreasing: true,
+          stickyAllDistinct: true,
+          absoluteDrift: [],
+          absoluteAnchoredOutside: 0
+        }
+      ]
+    }
+  ],
+  focusedTableEscapes: [],
+  focusedTableReachable: {
+    shellOverflowY: "auto",
+    shellScrollHeight: 4082,
+    shellClientHeight: 73,
+    rootScrollHeight: 198,
+    rootClientHeight: 198,
+    rootOverflowY: "auto"
+  },
   scrollContainers: [
     {
       element: "div.atlyn-funnel",
@@ -245,5 +305,102 @@ describe("layout probe assertions", () => {
     const unfinished = cleanReport();
     unfinished.renderState = "failed";
     expect(rules(unfinished)).toContain("render");
+  });
+});
+
+describe("layout probe assertions that only exist once content overflows", () => {
+  test("probes overflowing fixtures, not only small tiles", () => {
+    const overflowing = buildProbeScenarios().filter((probe) => probe.expectOverflow === true);
+    expect(overflowing.length).toBeGreaterThanOrEqual(3);
+    // Enough stages and segments that a scrollable region cannot possibly fit.
+    overflowing.forEach((probe) => {
+      expect((probe.stage as string[]).length).toBeGreaterThanOrEqual(60);
+      expect(new Set(probe.group as string[]).size).toBeGreaterThanOrEqual(4);
+    });
+  });
+
+  test("fails loudly when a fixture built to overflow stops overflowing", () => {
+    // Content that fits never scrolls, and a region that never scrolls passes every
+    // scroll assertion vacuously. That silence is the failure mode being guarded here.
+    const report = cleanReport();
+    report.anyScrollable = false;
+    (report.scrollProbes as Array<Record<string, unknown>>)[0].verticallyScrollable = false;
+    expect(rules(report, { ...scenario, expectOverflow: true } as never)).toContain("fixture-not-overflowing");
+    expect(rules(cleanReport(), { ...scenario, expectOverflow: true } as never))
+      .not.toContain("fixture-not-overflowing");
+  });
+
+  test("catches a box that only leaves the tile once a region is scrolled", () => {
+    const report = cleanReport();
+    const probe = (report.scrollProbes as Array<Record<string, unknown>>)[0];
+    (probe.offsets as Array<Record<string, unknown>>)[1].escapes = [
+      { element: "div.atlyn-warnings", box: { top: -40 }, overflowPx: 40 }
+    ];
+    expect(rules(report)).toContain("escapes-root-scrolled");
+  });
+
+  test("catches sticky offsets collapsing onto each other after a scroll", () => {
+    const report = cleanReport();
+    const probe = (report.scrollProbes as Array<Record<string, unknown>>)[0];
+    const offset = (probe.offsets as Array<Record<string, unknown>>)[1];
+    offset.stickyTops = [
+      { element: "th", top: 67 },
+      { element: "th", top: 67 },
+      { element: "th", top: 67 },
+      { element: "th", top: 110 }
+    ];
+    offset.stickyStrictlyIncreasing = false;
+    offset.stickyAllDistinct = false;
+    expect(rules(report)).toContain("sticky-collapse");
+  });
+
+  test("catches an absolutely positioned child anchored outside its scroller", () => {
+    const report = cleanReport();
+    const probe = (report.scrollProbes as Array<Record<string, unknown>>)[0];
+    const offset = (probe.offsets as Array<Record<string, unknown>>)[1];
+    offset.absoluteDrift = [0];
+    offset.absoluteAnchoredOutside = 1;
+    expect(rules(report)).toContain("absolute-anchored-outside-scroller");
+  });
+
+  test("catches a positioned element resolving against the initial containing block", () => {
+    const report = cleanReport();
+    (report.positioned as Array<Record<string, unknown>>)[0].containingBlockInsideRoot = false;
+    (report.positioned as Array<Record<string, unknown>>)[0].containingBlock = "initial containing block";
+    expect(rules(report)).toContain("containing-block-escapes-root");
+  });
+
+  test("does not flag relative or sticky elements, which stay in flow and are clipped normally", () => {
+    // Only absolute and fixed resolve against a containing block; the root itself is
+    // relative and its containing block is legitimately outside the root.
+    expect(rules(cleanReport())).not.toContain("containing-block-escapes-root");
+    const sticky = cleanReport();
+    (sticky.positioned as Array<Record<string, unknown>>).push({
+      element: "th.header",
+      position: "sticky",
+      containingBlock: "initial containing block",
+      containingBlockInsideRoot: false
+    });
+    expect(rules(sticky)).not.toContain("containing-block-escapes-root");
+  });
+
+  test("catches the expanded accessible table being clipped with no scroll route", () => {
+    const report = cleanReport();
+    (report.focusedTableReachable as Record<string, unknown>).shellOverflowY = "hidden";
+    expect(rules(report)).toContain("focused-table-unreachable");
+
+    const rootClipped = cleanReport();
+    Object.assign(rootClipped.focusedTableReachable as Record<string, unknown>, {
+      rootScrollHeight: 900,
+      rootClientHeight: 198,
+      rootOverflowY: "hidden"
+    });
+    expect(rules(rootClipped)).toContain("focused-table-unreachable");
+  });
+
+  test("catches a box leaving the tile while the accessible table has focus", () => {
+    const report = cleanReport();
+    report.focusedTableEscapes = [{ element: "div.atlyn-funnel", box: { top: 0 }, overflowPx: 65 }];
+    expect(rules(report)).toContain("focused-table-escapes");
   });
 });

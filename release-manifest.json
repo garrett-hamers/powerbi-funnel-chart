@@ -9,8 +9,8 @@
   },
   "package": {
     "filename": "atlynFunnelA1B2C3D4.1.0.1.0.pbiviz",
-    "sha256": "4d7ce6fc29f78907c5c0d539849ea1b2c19dca65e56e9a39555813d4fb66384a",
-    "bytes": 50150
+    "sha256": "448d59f29c224d725e7dbf9c14aaa26fce0fc896ddb326d5b0e5f9fc4e816eb7",
+    "bytes": 50560
   },
   "reproducible": true,
   "zipNormalization": {
@@ -18,7 +18,7 @@
     "compression": "DEFLATE",
     "compressionLevel": 9
   },
-  "sourceCommit": "c5d5215c97536f1effe00662d08679d5dab06954",
+  "sourceCommit": "cf4db565ff40ff27a9ef610a30fd819026287d9d",
   "packageVersion": "1.0.1",
   "privileges": [],
   "externalJS": [],
@@ -72,15 +72,15 @@
     },
     "submissionDossier": {
       "path": "docs/partner-center-submission.md",
-      "bytes": 20493,
-      "sha256": "71f539e577c288d9b92b59817f988cfbc0c82bd3dbd345b84a9a4dae75535f80"
+      "bytes": 21383,
+      "sha256": "00554c95eb1ed3493165cc55c7a1e2faf08621100c9be6758e010e72f11ded26"
     },
     "sampleReportProject": {
       "path": "samples/atlyn-funnel-sample",
       "format": "pbip",
       "files": 18,
-      "bytes": 185244,
-      "sha256": "a28c01bc1423a3d9ead0ddb2d22f6541d73e6ef3f5ec38b46228d7642eebd4e9"
+      "bytes": 186407,
+      "sha256": "995b182bfbe285bf139d2e28b0c9d1a9a26b52f0370b0265adcee0eeead2344f"
     }
   },
   "publication": {

@@ -13,13 +13,15 @@ import { DataViewLike } from "../src/model";
 const fs = require("node:fs") as typeof import("node:fs");
 
 const stylesheet = fs.readFileSync("src/style.css", "utf8");
+// Comments would otherwise be glued onto the following selector by the naive parser.
+const declarations = stylesheet.replace(/\/\*[\s\S]*?\*\//g, "");
 
 const ruleBody = (selector: string): string => {
   const pattern = new RegExp(
     `(^|\\})\\s*${selector.replace(/[.[\]"=^$*+?()|{}\\/-]/g, "\\$&")}\\s*\\{([^}]*)\\}`,
     "m"
   );
-  const match = pattern.exec(stylesheet);
+  const match = pattern.exec(declarations);
   if (!match) {
     throw new Error(`src/style.css declares no rule for ${selector}`);
   }
@@ -33,7 +35,7 @@ const declaration = (selector: string, property: string): string | undefined => 
 };
 
 const cssRules = (): Array<{ selector: string; body: string }> =>
-  [...stylesheet.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((match) => ({
+  [...declarations.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((match) => ({
     selector: match[1].trim(),
     body: match[2]
   }));
@@ -140,17 +142,45 @@ describe("stylesheet layout contract", () => {
       .filter((rule) => /overflow\s*:\s*hidden/.test(rule.body))
       .map((rule) => rule.selector);
     expect(clipping.sort()).toEqual([
-      ".atlyn-accessible-table",
+      ".atlyn-accessible-shell",
       ".atlyn-chart",
-      ".atlyn-summary",
       ".atlyn-summary h2",
       ".atlyn-summary-intake",
       ".atlyn-summary-metric"
     ]);
   });
 
-  test("the summary never shrinks, because a shrunk summary clips its own text", () => {
+  test("the summary never shrinks, and scrolls rather than hiding per-group figures", () => {
     expect(declaration(".atlyn-summary", "flex")).toBe("0 0 auto");
+    // One conversion figure is rendered per group, so with many groups the summary can
+    // exceed its ceiling. Those figures are data, so they scroll instead of vanishing
+    // behind overflow: hidden where nothing could reach them.
+    expect(declaration(".atlyn-summary", "overflow")).toBe("auto");
+    expect(declaration(".atlyn-summary", "max-height")).toMatch(/%$/);
+  });
+
+  test("the root establishes the containing block its positioned child needs", () => {
+    // Without this the absolutely positioned accessible table resolves against the
+    // initial containing block, so the root's overflow cannot clip it and it does not
+    // scroll with the root. It only looks contained because it is a clipped 1px box.
+    expect(declaration(".atlyn-funnel", "position")).toBe("relative");
+    const absolutes = cssRules().filter((rule) => /position\s*:\s*(absolute|fixed)/.test(rule.body));
+    expect(absolutes.map((rule) => rule.selector)).toEqual([".atlyn-accessible-shell"]);
+  });
+
+  test("the one-pixel visually hidden box is the wrapper, never the table itself", () => {
+    // A <table> refuses any width below its min-content width, so a table styled as
+    // "1px" keeps a full-size box in the layout that only paint-time clipping hides -
+    // and that box lands in the root's scrollable overflow.
+    expect(declaration(".atlyn-accessible-shell", "width")).toBe("1px");
+    expect(declaration(".atlyn-accessible-shell", "height")).toBe("1px");
+    expect(declaration(".atlyn-accessible-shell", "overflow")).toBe("hidden");
+    expect(declaration(".atlyn-accessible-table", "width")).not.toBe("1px");
+    expect(declaration(".atlyn-accessible-table", "height")).toBeUndefined();
+    expect(declaration(".atlyn-accessible-table", "position")).toBeUndefined();
+    // On focus it returns to flow, and it must stay reachable rather than be clipped.
+    expect(declaration(".atlyn-accessible-shell:focus-within", "position")).toBe("static");
+    expect(declaration(".atlyn-accessible-shell:focus-within", "overflow")).toBe("auto");
   });
 });
 
@@ -249,10 +279,64 @@ describe("chrome degrades before data", () => {
     expect(element.querySelector(".atlyn-funnel")?.getAttribute("data-tiny")).toBe("true");
     visual.destroy();
   });
+
+  test("wraps the accessible table so the clipped box is not the table itself", () => {
+    const { element, visual } = mount();
+    render(visual, 1280, 620);
+    const shell = element.querySelector(".atlyn-accessible-shell");
+    const table = element.querySelector(".atlyn-accessible-table");
+    expect(shell).not.toBeNull();
+    expect(table?.parentElement).toBe(shell);
+    expect(table?.getAttribute("role")).toBe("table");
+    expect(table?.getAttribute("tabindex")).toBe("0");
+    // Every stage is still in the table, whatever the tile drops on screen.
+    render(visual, 160, 80);
+    expect(element.querySelectorAll(".atlyn-accessible-table tbody tr")).toHaveLength(stages.length);
+    visual.destroy();
+  });
+
+  test("renders one conversion figure per group so many groups need a scroll route", () => {
+    const groups = ["North America", "EMEA", "APAC", "LATAM"];
+    const stage: string[] = [];
+    const group: string[] = [];
+    const value: number[] = [];
+    groups.forEach((segment, segmentIndex) => {
+      stages.forEach((label, stageIndex) => {
+        stage.push(label);
+        group.push(segment);
+        value.push(Math.round((100000 - segmentIndex * 9000) * Math.pow(0.8, stageIndex)));
+      });
+    });
+    const { element, visual } = mount();
+    visual.update({
+      dataViews: [{
+        categorical: {
+          categories: [
+            {
+              source: { roles: { Stage: true }, displayName: "Stage" },
+              values: stage,
+              identity: stage.map((label, index) => ({ key: `${label}:${index}` }))
+            },
+            {
+              source: { roles: { Group: true }, displayName: "Segment" },
+              values: group,
+              identity: group.map((label, index) => ({ key: `${label}:${index}` }))
+            }
+          ],
+          values: [{
+            source: { roles: { Value: true }, displayName: "Value" },
+            values: value
+          }]
+        }
+      }],
+      viewport: { width: 398, height: 298 }
+    } as never);
+    expect(element.querySelectorAll(".atlyn-summary-metric")).toHaveLength(groups.length);
+    visual.destroy();
+  });
 });
 
-describe("chart geometry adapts to the tile", () => {
-  test("the canvas tracks the real tile width so the drawing is not scaled down", () => {
+describe("chart geometry adapts to the tile", () => {  test("the canvas tracks the real tile width so the drawing is not scaled down", () => {
     const { element, visual } = mount();
     render(visual, 258, 198);
     const svg = element.querySelector("svg");

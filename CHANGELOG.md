@@ -4,6 +4,33 @@ All notable changes to Atlyn Funnel are documented here.
 
 ## Unreleased
 
+- Fixed three defects that were invisible while content fitted. Content that fits never
+  scrolls, and a region that never scrolls passes every scroll assertion vacuously, so
+  the probe now also runs fixtures built to overflow — twelve stages across six segments,
+  72 rows — and scrolls each region to 0%, 25%, 50% and 100% before re-measuring:
+  - The visual root computed `position: static`, so the absolutely positioned accessible
+    table resolved against the initial containing block. The root's `overflow` could not
+    clip it and it did not scroll with the root; it only looked contained because it was
+    a paint-clipped box. The root now declares `position: relative`.
+  - That in turn exposed that the "visually hidden" table was never one pixel. A
+    `<table>` refuses any width below its min-content width, so the element styled
+    `width: 1px; height: 1px` was really a 434x293 box hidden only by paint-time `clip`.
+    Once properly anchored it contributed **3471px of scrollable overflow** to a 620px
+    tile. The one-pixel clipped box is now a wrapper `div`, which can actually be one
+    pixel, and the table sits inside it.
+  - The summary clipped per-group conversion figures behind `overflow: hidden`. One
+    figure is rendered per group, so at six groups it exceeded its ceiling and 33–48px of
+    real data was unreachable. It scrolls now.
+- The layout probe additionally reports every non-static element with the containing
+  block it resolves against, and fails when an `absolute` or `fixed` element resolves
+  outside the visual root. It also asserts the sticky invariant — after scrolling, sticky
+  header offsets must be strictly increasing and all distinct — and that absolutely
+  positioned children move with the scroller that contains them. This visual declares no
+  `position: sticky`, so that invariant is currently vacuous; the probe records the sticky
+  count so that stays visible rather than assumed.
+- Probe scenarios that are meant to overflow carry `expectOverflow`, and the run fails
+  loudly if no region actually overflows, rather than passing every scrolled assertion by
+  never scrolling.
 - Fixed a small-tile layout defect that hid the funnel itself. The visual root stacked
   its regions with a `min-height: 80px` / `min-width: 160px` floor and no way to shrink,
   so as a tile narrowed the chrome above the chart wrapped onto more lines and pushed the

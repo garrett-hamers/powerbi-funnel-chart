@@ -111,6 +111,22 @@ is declared without `white-space: nowrap`, or when keyboard focus, selection sta
 reduced motion, high contrast or RTL regress. A test that only asserts the stylesheet is
 non-empty passes on a completely broken layout; only measured boxes catch it.
 
+**Small viewports and overflowing content are different tests.** Content that fits never
+scrolls, and a region that never scrolls passes every scroll assertion vacuously — so the
+probe also runs fixtures built to overflow (twelve stages across six segments, 72 rows)
+and scrolls every scrollable region to 0%, 25%, 50% and 100% before measuring again. Those
+scenarios are marked `expectOverflow`, and the run fails loudly if they ever stop
+overflowing rather than passing in silence.
+
+The probe also reports every non-static element together with the containing block it
+resolves against, and fails when an `absolute` or `fixed` element resolves outside the
+visual root — a root that computes `position: static` anchors nothing, so such an element
+escapes the root's `overflow` entirely and only appears contained by luck. After each
+scroll it checks that sticky header offsets stay strictly increasing and all distinct, and
+that absolutely positioned children move with the scroller containing them. This visual
+declares no `position: sticky`; the probe records the sticky count so that remains a
+measured fact rather than an assumption.
+
 Chrome degrades before data. As the tile shrinks the visual drops, in order, the heading
 that duplicates the tile title, the intake figure, the verbose stage sentence, the stage
 list, and finally the chart labels. The funnel stages, the conversion metric and the

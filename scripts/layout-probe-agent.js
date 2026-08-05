@@ -75,6 +75,45 @@
     empty: ".atlyn-empty"
   };
 
+  // An ancestor only clips, or anchors, a positioned descendant when it is part of that
+  // descendant's containing block chain. A root that computes position: static anchors
+  // nothing, so an absolutely positioned child resolves against the initial containing
+  // block and escapes the root's overflow entirely.
+  var establishesContainingBlock = function (style, forFixed) {
+    if (!forFixed && style.position !== "static") {
+      return true;
+    }
+    return (style.transform && style.transform !== "none") ||
+      (style.perspective && style.perspective !== "none") ||
+      (style.filter && style.filter !== "none") ||
+      (style.willChange || "").indexOf("transform") >= 0 ||
+      /(paint|layout|strict|content)/.test(style.contain || "");
+  };
+
+  var containingBlockOf = function (element, position) {
+    var node = parentOf(element);
+    while (node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        if (establishesContainingBlock(getComputedStyle(node), position === "fixed")) {
+          return node;
+        }
+      }
+      node = parentOf(node);
+    }
+    return null;
+  };
+
+  var contains = function (ancestor, element) {
+    var node = element;
+    while (node) {
+      if (node === ancestor) {
+        return true;
+      }
+      node = parentOf(node);
+    }
+    return false;
+  };
+
   var measure = function (harness, report) {
     var mount = harness.mount;
     var shadow = harness.shadow;
@@ -104,6 +143,7 @@
     var clipped = [];
     var ellipsisWithoutNowrap = [];
     var scrollContainers = [];
+    var positioned = [];
 
     var inAccessibleTable = function (element) {
       var node = element;
@@ -111,7 +151,8 @@
         if (
           node.nodeType === Node.ELEMENT_NODE &&
           node.classList &&
-          node.classList.contains("atlyn-accessible-table")
+          (node.classList.contains("atlyn-accessible-table") ||
+            node.classList.contains("atlyn-accessible-shell"))
         ) {
           return true;
         }
@@ -175,6 +216,23 @@
         ellipsisWithoutNowrap.push({ element: describe(element), whiteSpace: style.whiteSpace });
       }
 
+      if (style.position !== "static") {
+        var containingBlock = containingBlockOf(element, style.position);
+        positioned.push({
+          element: describe(element),
+          position: style.position,
+          top: style.top,
+          left: style.left,
+          zIndex: style.zIndex,
+          box: box,
+          containingBlock: containingBlock ? describe(containingBlock) : "initial containing block",
+          // When the containing block sits outside the visual root, no amount of
+          // overflow on the root can clip this element.
+          containingBlockInsideRoot: Boolean(containingBlock) && contains(mount, containingBlock),
+          scrollerBetween: scroller
+        });
+      }
+
       // Content clipped by overflow: hidden is unreachable: there is no scrollbar and
       // no keyboard route to it. Single-line ellipsis truncation, the visually hidden
       // accessible table and SVG canvases are deliberate and excluded.
@@ -204,6 +262,8 @@
     report.clipped = clipped;
     report.ellipsisWithoutNowrap = ellipsisWithoutNowrap;
     report.scrollContainers = scrollContainers;
+    report.positioned = positioned;
+
 
     var visibleFraction = function (box) {
       var width = Math.max(0, Math.min(box.right, rootBox.right) - Math.max(box.left, rootBox.left));
@@ -325,6 +385,167 @@
       harness.update({});
     } else {
       report.selection = null;
+    }
+
+    // Content that fits never scrolls, and a region that never scrolls hides every bug
+    // that only appears once it does: sticky offsets that collapse onto each other,
+    // absolutely positioned children anchored outside the scroller, boxes that leave
+    // the tile only at a non-zero scroll offset. So scroll everything that can scroll
+    // and measure again at each offset.
+    var scanEscapes = function () {
+      var found = [];
+      // Re-read the root box: focusing or scrolling can move the page underneath us,
+      // and comparing fresh rects against a stale root would invent escapes.
+      var currentRoot = boxOf(mount);
+      walk(mount, function (element) {
+        if (element === mount) {
+          return;
+        }
+        var style = getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden") {
+          return;
+        }
+        if (scrollsBetween(element, mount)) {
+          return;
+        }
+        var box = boxOf(element);
+        var over = Math.max(
+          round(currentRoot.left - box.left),
+          round(currentRoot.top - box.top),
+          round(box.right - currentRoot.right),
+          round(box.bottom - currentRoot.bottom)
+        );
+        if (over > EPSILON) {
+          found.push({ element: describe(element), box: box, overflowPx: over });
+        }
+      });
+      return found;
+    };
+
+    var stickyTopsIn = function (container) {
+      var tops = [];
+      walk(container, function (element) {
+        if (getComputedStyle(element).position === "sticky") {
+          tops.push({ element: describe(element), top: boxOf(element).top });
+        }
+      });
+      return tops;
+    };
+
+    var absoluteChildrenIn = function (container) {
+      var found = [];
+      walk(container, function (element) {
+        if (element !== container && getComputedStyle(element).position === "absolute") {
+          found.push(element);
+        }
+      });
+      return found;
+    };
+
+    var scrollProbes = [];
+    var scrollers = [];
+    walk(mount, function (element) {
+      var style = getComputedStyle(element);
+      if (/(auto|scroll)/.test(style.overflowX) || /(auto|scroll)/.test(style.overflowY)) {
+        scrollers.push(element);
+      }
+    });
+
+    scrollers.forEach(function (container) {
+      var maxY = Math.max(0, container.scrollHeight - container.clientHeight);
+      var maxX = Math.max(0, container.scrollWidth - container.clientWidth);
+      var probe = {
+        element: describe(container),
+        scrollHeight: container.scrollHeight,
+        clientHeight: container.clientHeight,
+        scrollWidth: container.scrollWidth,
+        clientWidth: container.clientWidth,
+        verticallyScrollable: maxY > 1,
+        horizontallyScrollable: maxX > 1,
+        offsets: []
+      };
+      if (maxY <= 1 && maxX <= 1) {
+        scrollProbes.push(probe);
+        return;
+      }
+      var absolutes = absoluteChildrenIn(container);
+      var absoluteBefore = absolutes.map(function (element) {
+        return boxOf(element).top;
+      });
+      [0, 0.25, 0.5, 1].forEach(function (fraction) {
+        var targetY = Math.round(maxY * fraction);
+        var targetX = Math.round(maxX * fraction);
+        container.scrollTop = targetY;
+        container.scrollLeft = targetX;
+        var stickyTops = stickyTopsIn(container);
+        var strictlyIncreasing = true;
+        var allDistinct = true;
+        for (var index = 1; index < stickyTops.length; index += 1) {
+          if (stickyTops[index].top <= stickyTops[index - 1].top) {
+            strictlyIncreasing = false;
+          }
+          if (Math.abs(stickyTops[index].top - stickyTops[index - 1].top) <= EPSILON) {
+            allDistinct = false;
+          }
+        }
+        var absoluteDrift = absolutes.map(function (element, absoluteIndex) {
+          return round(absoluteBefore[absoluteIndex] - boxOf(element).top);
+        });
+        probe.offsets.push({
+          scrollTop: container.scrollTop,
+          scrollLeft: container.scrollLeft,
+          requestedTop: targetY,
+          escapes: scanEscapes(),
+          stickyTops: stickyTops,
+          stickyStrictlyIncreasing: strictlyIncreasing,
+          stickyAllDistinct: allDistinct,
+          // An absolutely positioned child anchored outside the scroller stays put
+          // while everything around it moves; it should drift by the scroll amount.
+          absoluteDrift: absoluteDrift,
+          absoluteAnchoredOutside: absoluteDrift.filter(function (drift) {
+            return container.scrollTop > 1 && Math.abs(drift - container.scrollTop) > 1;
+          }).length
+        });
+      });
+      container.scrollTop = 0;
+      container.scrollLeft = 0;
+      scrollProbes.push(probe);
+    });
+    report.scrollProbes = scrollProbes;
+    report.anyScrollable = scrollProbes.some(function (probe) {
+      return probe.verticallyScrollable || probe.horizontallyScrollable;
+    });
+    report.stickyCount = stickyTopsIn(mount).length;
+
+    // The accessible table is the one absolutely positioned element in the visual, and
+    // on focus it returns to flow at full width. Under overflow that is exactly when a
+    // mis-anchored box would blow out of the tile, so measure it there too.
+    var tableUnderOverflow = shadow.querySelector(".atlyn-accessible-table");
+    if (tableUnderOverflow) {
+      tableUnderOverflow.focus();
+      report.focusedTableEscapes = scanEscapes();
+      report.focusedTableBox = boxOf(tableUnderOverflow);
+      var shell = shadow.querySelector(".atlyn-accessible-shell");
+      // Expanding on demand may make the root scroll, which is fine: the root is a
+      // scroll container, so the content stays reachable. What would not be fine is
+      // the expansion being clipped away with no route to it.
+      report.focusedTableReachable = {
+        shellOverflowY: shell ? getComputedStyle(shell).overflowY : null,
+        shellScrollHeight: shell ? shell.scrollHeight : 0,
+        shellClientHeight: shell ? shell.clientHeight : 0,
+        rootScrollHeight: funnel ? funnel.scrollHeight : 0,
+        rootClientHeight: funnel ? funnel.clientHeight : 0,
+        rootOverflowY: funnel ? getComputedStyle(funnel).overflowY : null
+      };
+      tableUnderOverflow.blur();
+      if (funnel) {
+        funnel.scrollTop = 0;
+        funnel.scrollLeft = 0;
+      }
+    } else {
+      report.focusedTableEscapes = [];
+      report.focusedTableBox = null;
+      report.focusedTableReachable = null;
     }
 
     // Keyboard focus: the ring must stay inside the tile and focusing must not scroll

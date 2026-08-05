@@ -472,7 +472,13 @@ export class Visual implements IVisual {
     return list;
   }
 
-  private createAccessibleTable(): HTMLTableElement {
+  private createAccessibleTable(): HTMLDivElement {
+    // A <table> ignores any width below its min-content width, so the table element
+    // itself can never be the one-pixel box of the visually hidden pattern - it stays
+    // full size and is merely clipped at paint time, which leaves its real geometry in
+    // the layout. The wrapper is the box that is genuinely one pixel and clips it.
+    const shell = document.createElement("div");
+    shell.className = "atlyn-accessible-shell";
     const table = document.createElement("table");
     table.className = "atlyn-accessible-table";
     table.setAttribute("role", "table");
@@ -519,7 +525,8 @@ export class Visual implements IVisual {
       body.appendChild(row);
     });
     table.appendChild(body);
-    return table;
+    shell.appendChild(table);
+    return shell;
   }
 
   private navigateStage(index: number, event: KeyboardEvent): void {
