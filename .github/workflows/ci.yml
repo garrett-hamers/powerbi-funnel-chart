@@ -35,6 +35,40 @@ jobs:
         run: npm run build
       - name: Package
         run: npm run package
+      - name: Record package hash
+        run: |
+          shopt -s nullglob
+          artifacts=(dist/*.pbiviz)
+          if [ "${#artifacts[@]}" -ne 1 ]; then
+            echo "Expected exactly one dist/*.pbiviz, found ${#artifacts[@]}" >&2
+            exit 1
+          fi
+          artifact="${artifacts[0]}"
+          name="$(basename "$artifact")"
+          sha="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
+          bytes="$(stat -c %s "$artifact")"
+          echo "Packaged $name"
+          echo "  SHA-256: $sha"
+          echo "  bytes:   $bytes"
+          {
+            echo "### Packaged visual"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Filename | \`$name\` |"
+            echo "| SHA-256 | \`$sha\` |"
+            echo "| Bytes | \`$bytes\` |"
+            echo
+            echo "This SHA-256 is of the \`.pbiviz\` itself. The downloadable artifact is a"
+            echo "zip wrapper added by \`actions/upload-artifact\`, so hash the extracted file"
+            echo "rather than the download."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload packaged visual
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlyn-funnel-pbiviz
+          path: dist/*.pbiviz
+          if-no-files-found: error
       - name: Sample report
         run: npm run sample-report
       - name: Release manifest

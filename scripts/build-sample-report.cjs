@@ -25,17 +25,31 @@ const projectRoot = path.join(root, "samples", "atlyn-funnel-sample");
 const reportRoot = path.join(projectRoot, `${projectName}.Report`);
 const modelRoot = path.join(projectRoot, `${projectName}.SemanticModel`);
 
+/*
+ * Report definition schema versions.
+ *
+ * Power BI Desktop rejects a report definition newer than the installed build supports,
+ * so these are pinned to versions a real Desktop build has been observed to accept
+ * (report 2.1.0, page 2.0.0, pagesMetadata 1.0.0, visualContainer 2.7.0) rather than to
+ * the newest versions Microsoft publishes. Do not bump one because a newer number exists
+ * on developer.microsoft.com; bump it only after Desktop has opened the result.
+ *
+ * report 2.1.0 also changes the shape of themeCollection.baseTheme.reportVersionAtImport:
+ * it is a plain version string here, and only becomes a {visual, page, report} object at
+ * report 3.0.0 and above.
+ */
 const SCHEMA = {
   pbip: "https://developer.microsoft.com/json-schemas/fabric/pbip/pbipProperties/1.0.0/schema.json",
   pbir: "https://developer.microsoft.com/json-schemas/fabric/item/report/definitionProperties/2.0.0/schema.json",
   pbism: "https://developer.microsoft.com/json-schemas/fabric/item/semanticModel/definitionProperties/1.0.0/schema.json",
   version: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/versionMetadata/1.0.0/schema.json",
-  report: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/3.0.0/schema.json",
+  report: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/2.1.0/schema.json",
   pages: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/pagesMetadata/1.0.0/schema.json",
   page: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.0.0/schema.json",
   visual: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json"
 };
 const REPORT_DEFINITION_VERSION = "2.0.0";
+const BASE_THEME = { name: "CY23SU04", reportVersionAtImport: "5.46" };
 const STAGES_TABLE = "Funnel stages";
 const DIAGNOSTICS_TABLE = "Funnel diagnostics";
 const PAGE_WIDTH = 1280;
@@ -302,8 +316,8 @@ const main = async () => {
     $schema: SCHEMA.report,
     themeCollection: {
       baseTheme: {
-        name: "CY23SU04",
-        reportVersionAtImport: { visual: "2.7.0", page: "2.0.0", report: "3.0.0" },
+        name: BASE_THEME.name,
+        reportVersionAtImport: BASE_THEME.reportVersionAtImport,
         type: "SharedResources"
       }
     },

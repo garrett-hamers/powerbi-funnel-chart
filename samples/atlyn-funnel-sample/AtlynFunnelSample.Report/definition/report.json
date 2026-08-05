@@ -1,13 +1,9 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/3.0.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/2.1.0/schema.json",
   "themeCollection": {
     "baseTheme": {
       "name": "CY23SU04",
-      "reportVersionAtImport": {
-        "visual": "2.7.0",
-        "page": "2.0.0",
-        "report": "3.0.0"
-      },
+      "reportVersionAtImport": "5.46",
       "type": "SharedResources"
     }
   },
