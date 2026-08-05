@@ -407,6 +407,30 @@ describe("record construction", () => {
     ).toBe(true);
   });
 
+  test("an expectation shape assertionHolds does not recognise falls through to the count map", () => {
+    /*
+     * What keeps the claim above true, and its limit. "Every shape describeScene emits is
+     * checked here" is correct today - the committed record carries ten distinct shapes
+     * and all ten have a branch - but the claim has no mechanism for staying correct: a
+     * new expectation shape would arrive with no branch of its own and fall through to
+     * the count-map comparison.
+     *
+     * Measured, rather than assumed:
+     *
+     *   { atMost: 5 }      vs 5                 false   fails closed
+     *   { between: [1,9] } vs 5                 false   fails closed
+     *   { withinPercent: 2 } vs { withinPercent: 2 }   TRUE
+     *
+     * So it fails closed only while the measured value does not mirror the expectation.
+     * A future shape recorded as its own measurement would pass vacuously - the exact
+     * shape this file refuses elsewhere. Asserted here as it behaves, not as it ought to,
+     * so the next person adding a shape reads the real boundary rather than a promise.
+     */
+    expect(assertionHolds({ expected: { atMost: 5 }, measured: 5 })).toBe(false);
+    expect(assertionHolds({ expected: { between: [1, 9] }, measured: 5 })).toBe(false);
+    expect(assertionHolds({ expected: { withinPercent: 2 }, measured: { withinPercent: 2 } })).toBe(true);
+  });
+
   test("describeScene refuses to invent values when the render produced nothing", () => {
     const empty = describeScene(expectationFor("01-conversion-funnel"), {
       id: "01-conversion-funnel",
