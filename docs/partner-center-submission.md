@@ -205,6 +205,29 @@ stale file is removed rather than left in place while the run reports success.
 `npm run screenshots:verify` runs the whole gate without touching `assets/screenshots`,
 which is what CI executes.
 
+Every capture also writes `assets/screenshot-capture.json`, so what it measured survives
+the run. Without it the assertions above would prove each screenshot was right at the
+moment it was written and nothing more: a file that is hand-edited, reverted, or swapped
+afterwards satisfies every remaining gate, since the only checks left are its dimensions
+and byte size. The record holds, per scene, the measured values themselves (bar counts and
+drawn widths, per-segment label and row counts, the text of every summary metric and
+diagnostic, each region's measured size), the SHA-256 of the PNG the capture wrote, and
+the SHA-256 of the packaged `.pbiviz` those pixels were rendered from.
+
+`npm run certification-audit` re-derives all three from the working tree and fails on any
+mismatch. The third is the one that matters most: a screenshot captured from an earlier
+build and committed beside a later one misrepresents the product to every customer who
+reads the listing. Recording the version string instead would not catch it, because the
+packaged bytes move more than once inside a single version. The audit also refuses a
+record that vouches for nothing — no assertions, a missing measured value, or a measured
+value that does not satisfy the expectation recorded next to it.
+
+Those hashes pin the committed bytes the assertions were applied to. They are not a golden
+image and must never become a re-render comparison: browser renders are not bit-stable,
+and the same three scenes render 55-58% larger on this repository's Linux CI runner than
+on Windows purely because the font stack differs, while every content assertion passes
+identically on both.
+
 Set `CHROME_PATH` if Chrome, Edge, or Chromium is not in a default install location. No
 browser automation package is added to `package.json`, so `npm ci` and `npm audit` in CI
 are unaffected.

@@ -8,6 +8,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const JSZip = require("jszip");
 
 const root = path.resolve(__dirname, "..");
@@ -29,7 +30,8 @@ const findPackagePath = () => {
 };
 
 const readPackagedBundle = async (packagePath = findPackagePath()) => {
-  const zip = await JSZip.loadAsync(fs.readFileSync(packagePath));
+  const packageBytes = fs.readFileSync(packagePath);
+  const zip = await JSZip.loadAsync(packageBytes);
   const resourceName = Object.keys(zip.files).find(
     (name) => name.startsWith("resources/") && name.endsWith(".pbiviz.json")
   );
@@ -52,6 +54,12 @@ const readPackagedBundle = async (packagePath = findPackagePath()) => {
     version: resource?.visual?.version,
     packagePath,
     packageName: path.basename(packagePath),
+    // Identifies the exact artifact these bytes came out of. Screenshots record it so
+    // a committed image can be tied back to the build it depicts: the version string
+    // alone is far too coarse, because the packaged bytes can move more than once
+    // within a single version.
+    packageSha256: crypto.createHash("sha256").update(packageBytes).digest("hex"),
+    packageBytes: packageBytes.length,
     jsBytes: Buffer.byteLength(js, "utf8"),
     cssBytes: Buffer.byteLength(css, "utf8")
   };
