@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const { readPngContentProfile } = require("./png-utils.cjs");
 const { inspectSampleReport } = require("./sample-report-utils.cjs");
 const { readRecord, auditCaptureRecord, RECORD_PATH } = require("./screenshot-capture-record.cjs");
+const { hashProject: digestProject } = require("./project-digest.cjs");
 
 /*
  * Known gap, recorded here because a reader arrives at this file directly.
@@ -379,6 +380,23 @@ requireCondition(
 requireCondition(
   typeof recordedSampleReport?.sha256 === "string" && /^[a-f0-9]{64}$/.test(recordedSampleReport.sha256),
   "release manifest must record a sample report content digest"
+);
+/*
+ * Re-derived and compared, not merely well-formed. The check above proves the manifest
+ * carries something shaped like a SHA-256; it cannot tell whether that digest still
+ * describes the project on disk. A sample whose contents change while its file count
+ * holds - regenerating the embedded visual, say - passed every gate here, because the
+ * count matched and the recorded hash was still a valid-looking hash.
+ *
+ * The packaged artifact twenty lines below has always been re-derived and compared. This
+ * is the same check for the other folder-shaped asset, using the identical derivation the
+ * manifest was written with rather than a second copy of it.
+ */
+const derivedSampleReport = digestProject(root, sampleReportPath);
+requireCondition(
+  Boolean(derivedSampleReport) && derivedSampleReport.sha256 === recordedSampleReport?.sha256,
+  "release manifest sample report digest does not match the tracked project; " +
+  "re-run `npm run sample-report` and `npm run release-manifest`"
 );
 requireCondition(
   recordedSampleReport?.files === sampleReport.files.length,
