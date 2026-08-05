@@ -222,7 +222,7 @@ const buildHarnessHtml = (scenario, viewport, bundle, options = {}) => `<!doctyp
 <style>
 html, body {
   align-items: center;
-  background: #eef1f6;
+  background: ${options.bare ? "#ffffff" : "#eef1f6"};
   display: flex;
   height: ${viewport.height}px;
   justify-content: center;
@@ -233,10 +233,10 @@ html, body {
 }
 #atlyn-visual-host {
   background: #ffffff;
-  border: 1px solid #d5dce7;
+${options.bare ? "" : `  border: 1px solid #d5dce7;
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(23, 32, 51, 0.08);
-  /*
+`}  /*
    * content-box so the inline width/height below describe the space Power BI hands
    * the visual. With border-box the decorative border would eat two pixels and every
    * measurement would be two pixels short of the real tile.
@@ -293,6 +293,7 @@ const writeHarnessPages = async (outputDirectory, options = {}) => {
       htmlPath,
       buildHarnessHtml(scenario, pageViewport, bundle, {
         extraScript: options.extraScript,
+        bare: options.bare,
         guid: bundle.guid
       })
     );
