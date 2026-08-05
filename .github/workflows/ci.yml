@@ -87,6 +87,13 @@ jobs:
           if-no-files-found: error
       - name: Sample report
         run: npm run sample-report
+      - name: Verify generated sample report is committed
+        run: |
+          if [ -n "$(git status --porcelain -- samples/atlyn-funnel-sample)" ]; then
+            echo "npm run sample-report changed samples/atlyn-funnel-sample; commit the regenerated sample report." >&2
+            git status --short -- samples/atlyn-funnel-sample
+            exit 1
+          fi
       - name: Release manifest
         run: npm run release-manifest
       - name: Certification audit
