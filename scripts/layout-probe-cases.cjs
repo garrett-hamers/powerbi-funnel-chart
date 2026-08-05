@@ -609,6 +609,23 @@ const evaluateReport = (scenario, report) => {
     ));
   });
 
+  /*
+   * A label carrying text but measuring zero wide is invisible, and the escape rule above
+   * cannot see it: the agent has to skip it because the escape arithmetic needs a width.
+   * That skip used to be silent, so this defect had no rule anywhere in the probe - and
+   * the screenshot pipeline only renders one tile size, so a label that collapses at a
+   * small tile was invisible to both instruments. Measured 0 across all nine scenarios on
+   * the current build.
+   */
+  (report.chartLabelCollapses ?? []).forEach((entry) => {
+    findings.push(finding(
+      scenario,
+      "chart-label-collapsed",
+      `chart label "${entry.text}" carries text but rendered ${entry.box.width}x${entry.box.height}px, ` +
+      "so it is invisible in the chart"
+    ));
+  });
+
   const chart = report.regions?.chartScroll;
   if (!chart) {
     findings.push(finding(scenario, "chart-missing", "no .atlyn-chart-scroll was rendered"));
