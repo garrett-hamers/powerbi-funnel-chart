@@ -95,7 +95,8 @@ const main = async () => {
   const bundle = pages[0].bundle;
   process.stdout.write(
     `Probing ${pages.length} case(s) from ${bundle.packageName} ` +
-    `(js ${bundle.jsBytes} bytes, css ${bundle.cssBytes} bytes) with ${browser}\n\n`
+    `(js ${bundle.jsBytes} bytes, css ${bundle.cssBytes} bytes, sha256 ${bundle.packageSha256}) ` +
+    `with ${browser}\n\n`
   );
 
   const rows = [];
@@ -135,7 +136,25 @@ const main = async () => {
   printTable(rows);
 
   const detailPath = path.join(workDirectory, "layout-probe-report.json");
-  fs.writeFileSync(detailPath, `${JSON.stringify(reports, null, 2)}\n`);
+  /*
+   * The measured artifact is named in the report, not just in the console line. "The
+   * probe is clean" and "the screenshots verified" are claims about a build, and nothing
+   * bound either to one: the capture record already carries the packaged sha256, the
+   * probe computed the same value and discarded it. Two green results could describe two
+   * different artifacts and read as one - which happened in this repo, when a stale
+   * dist/ from an interrupted experiment was measured as though it were current.
+   */
+  fs.writeFileSync(detailPath, `${JSON.stringify({
+    measuredPackage: {
+      name: bundle.packageName,
+      sha256: bundle.packageSha256,
+      guid: bundle.guid,
+      version: bundle.version,
+      jsBytes: bundle.jsBytes,
+      cssBytes: bundle.cssBytes
+    },
+    scenarios: reports
+  }, null, 2)}\n`);
   process.stdout.write(`\nFull measurements: ${path.relative(root, detailPath)}\n`);
 
   /*
