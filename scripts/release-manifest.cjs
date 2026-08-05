@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { readPngMetadata, readPngContentProfile } = require("./png-utils.cjs");
+const { hashProject: digestProject } = require("./project-digest.cjs");
 
 const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist");
@@ -119,40 +120,18 @@ const hashFile = (relativePath) => {
   };
 };
 
-const listFiles = (absoluteDirectory, prefix = "") =>
-  fs.readdirSync(absoluteDirectory, { withFileTypes: true })
-    .sort((left, right) => (left.name < right.name ? -1 : 1))
-    .flatMap((entry) => {
-      const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-      return entry.isDirectory()
-        ? listFiles(path.join(absoluteDirectory, entry.name), relative)
-        : [relative];
-    });
-
 /*
  * The sample report is a folder, so it is summarised as one order-independent digest
- * over every tracked file path and its content hash.
+ * over every tracked file path and its content hash. The derivation lives in
+ * scripts/project-digest.cjs so the certification audit re-derives it with this exact
+ * implementation rather than a second copy that could drift from it.
  */
 const hashProject = (relativePath) => {
-  const absolutePath = path.join(root, relativePath);
-  if (!fs.existsSync(absolutePath)) {
+  const summary = digestProject(root, relativePath);
+  if (!summary) {
     fail(`${relativePath} is missing; run \`npm run sample-report\` after packaging`);
   }
-  const files = listFiles(absolutePath);
-  const digest = crypto.createHash("sha256");
-  let bytes = 0;
-  files.forEach((file) => {
-    const contents = fs.readFileSync(path.join(absolutePath, ...file.split("/")));
-    bytes += contents.length;
-    digest.update(`${file}\n${crypto.createHash("sha256").update(contents).digest("hex")}\n`);
-  });
-  return {
-    path: relativePath,
-    format: "pbip",
-    files: files.length,
-    bytes,
-    sha256: digest.digest("hex")
-  };
+  return summary;
 };
 
 const expectedFilename = `${visual.guid}.${visual.version}.pbiviz`;
