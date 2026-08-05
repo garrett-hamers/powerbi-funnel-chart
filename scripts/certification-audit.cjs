@@ -5,6 +5,26 @@ const { readPngContentProfile } = require("./png-utils.cjs");
 const { inspectSampleReport } = require("./sample-report-utils.cjs");
 const { readRecord, auditCaptureRecord, RECORD_PATH } = require("./screenshot-capture-record.cjs");
 
+/*
+ * Known gap, recorded here because a reader arrives at this file directly.
+ *
+ * This is the release gate and it carries 81 conditions. Two of them have been observed
+ * to fire — both on a stale dist/, reporting that the release manifest hash and byte
+ * count did not match the package. The other 79 have never been seen to fail.
+ *
+ * That matters because a condition that can never fire returns nothing, and nothing is
+ * exactly what a working condition returns on a healthy build. This repo has a worked
+ * example: layout-probe's scrollsBetween() was structurally dead, read as clean, and hid
+ * 37 defects. The sibling checks in scripts/layout-probe-cases.cjs and
+ * scripts/screenshot-scene-expectations.cjs are now each driven once by
+ * tests/rule-coverage.test.ts; this file has no equivalent, because its conditions run at
+ * module scope against a fixed root and there is no seam to drive them through.
+ *
+ * Closing it means extracting this body into a function taking `root` and returning
+ * failures, the way scripts/screenshot-capture-record.cjs is already written. That is a
+ * restructure of the gate rather than an addition to it, so it is filed rather than
+ * improvised.
+ */
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) =>
   JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
