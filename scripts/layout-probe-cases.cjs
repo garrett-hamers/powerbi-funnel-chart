@@ -422,6 +422,11 @@ const evaluateFocusState = (scenario, report, findings) => {
  * not: it computes as a scroller, has no principal box, clips nothing, and would have
  * exempted every box beneath it.
  *
+ * Reading the computed value is necessary but not sufficient: a box can compute as a
+ * scroller, report a real scroll range, and still paint nothing. Measured, 900x500 of
+ * content in a 400x0 box scrolls to 500 and paints 400x0. So the requirement is non-zero
+ * *area*, not a non-zero extent on either axis.
+ *
  * The tempting stronger test — require scrollHeight > clientHeight — is wrong. A scroll
  * container whose content currently fits still clips, so demanding scroll geometry would
  * start reporting escapes that are genuinely contained.
@@ -434,8 +439,13 @@ const exemptingAncestor = (chain, outOfFlow) => {
     if (!scrolls) {
       continue;
     }
-    // No client area means no scroll box, whatever the overflow computes to.
-    if (!(entry.clientWidth > 0 || entry.clientHeight > 0)) {
+    // A scroll box with zero area paints nothing, so scrolling it can never reveal what
+    // is inside. Measured: a 400x0 box with 900x500 of content computes overflow-y: auto
+    // and scrolls to 500 while painting 400x0 - it reads as a working scroller by every
+    // test except area. Zero on *either* axis is disqualifying; requiring only that one
+    // extent be non-zero excuses exactly the collapsed-container defect this probe exists
+    // to catch.
+    if (!(entry.clientWidth > 0 && entry.clientHeight > 0)) {
       continue;
     }
     /*

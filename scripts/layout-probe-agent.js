@@ -79,14 +79,15 @@
    * Retained only for the informational `insideScroller` field on focus checks. It uses
    * the same corrected predicate as exemptingAncestor() in
    * scripts/layout-probe-cases.cjs — a declared overflow is not a scroll box unless the
-   * element actually has a client area — so the two cannot report different answers.
+   * element actually has a non-zero client *area* — so the two cannot report different
+   * answers. Zero on either axis paints nothing and therefore contains nothing.
    */
   var scrollsBetween = function (element, stopAt) {
     var measured = ancestorChainOf(element, stopAt);
     for (var index = 0; index < measured.chain.length; index += 1) {
       var entry = measured.chain[index];
       var scrolls = /(auto|scroll)/.test(entry.overflowX) || /(auto|scroll)/.test(entry.overflowY);
-      if (!scrolls || (entry.clientWidth <= 0 && entry.clientHeight <= 0)) {
+      if (!scrolls || entry.clientWidth <= 0 || entry.clientHeight <= 0) {
         continue;
       }
       if (!measured.outOfFlow || entry.isContainingBlock || entry.containsContainingBlock) {
